@@ -33,6 +33,26 @@ interface Props {
   route: FeedbackScreenRouteProp;
 }
 
+const MAX_INPUT_CHARS = 4000;
+
+function mapError(err: unknown): string {
+  if (err instanceof Error && err.name === 'AbortError') return '';
+  const message = err instanceof Error ? err.message : '';
+  if (message.includes('401') || message.toLowerCase().includes('authentication')) {
+    return 'Invalid API key. Check your key in Settings.';
+  }
+  if (message.includes('429')) {
+    return 'Rate limit reached. Wait a moment and try again.';
+  }
+  if (message.includes('500') || message.includes('529')) {
+    return 'Anthropic servers are having issues. Try again shortly.';
+  }
+  if (message.toLowerCase().includes('network') || message.toLowerCase().includes('fetch')) {
+    return 'Network error. Check your connection and try again.';
+  }
+  return 'Something went wrong. Please try again.';
+}
+
 export default function FeedbackScreen({ navigation, route }: Props) {
   const { mode } = route.params;
   const [input, setInput] = useState('');
@@ -40,6 +60,11 @@ export default function FeedbackScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const scrollRef = useRef<ScrollView>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   const handleGetFeedback = async () => {
     if (!input.trim()) {
@@ -54,35 +79,29 @@ export default function FeedbackScreen({ navigation, route }: Props) {
         'You need to add your Anthropic API key in Settings before using the app.',
         [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Go to Settings',
-            onPress: () => navigation.navigate('Settings'),
-          },
+          { text: 'Go to Settings', onPress: () => navigation.navigate('Settings') },
         ],
       );
       return;
     }
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     setLoading(true);
     setError('');
     setFeedback('');
 
     try {
-      const result = await getFeedback(apiKey, mode.systemPrompt, input.trim());
+      const result = await getFeedback(apiKey, mode.systemPrompt, input.trim(), controller.signal);
       setFeedback(result);
-      // Scroll to the feedback section after a brief delay
       setTimeout(() => {
         scrollRef.current?.scrollToEnd({ animated: true });
       }, 200);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Something went wrong.';
-      if (message.includes('401') || message.includes('authentication')) {
-        setError('Invalid API key. Check your key in Settings.');
-      } else if (message.includes('429')) {
-        setError('Rate limited. Wait a moment and try again.');
-      } else {
-        setError(message);
-      }
+      const mapped = mapError(err);
+      if (mapped) setError(mapped);
     } finally {
       setLoading(false);
     }
@@ -153,6 +172,7 @@ export default function FeedbackScreen({ navigation, route }: Props) {
             placeholderTextColor={COLORS.textMuted}
             textAlignVertical="top"
             editable={!loading}
+            maxLength={MAX_INPUT_CHARS}
           />
 
           {/* CTA button */}

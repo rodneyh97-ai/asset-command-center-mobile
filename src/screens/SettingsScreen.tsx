@@ -12,47 +12,37 @@ import {
   ScrollView,
 } from 'react-native';
 import { COLORS, FONT_SIZES, SPACING } from '../constants/theme';
-import { getApiKey, saveApiKey, clearApiKey } from '../services/storage';
+import { hasApiKey, saveApiKey, clearApiKey } from '../services/storage';
+
+const MIN_KEY_LENGTH = 40;
 
 export default function SettingsScreen() {
-  const [apiKey, setApiKey] = useState('');
-  const [saved, setSaved] = useState(false);
-  const [hasExistingKey, setHasExistingKey] = useState(false);
-  const [revealed, setRevealed] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const [hasKey, setHasKey] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      const key = await getApiKey();
-      if (key) {
-        setApiKey(key);
-        setHasExistingKey(true);
-        setSaved(true);
-      }
-    })();
+    let active = true;
+    hasApiKey().then((exists) => { if (active) setHasKey(exists); });
+    return () => { active = false; };
   }, []);
 
   const handleSave = async () => {
-    const trimmed = apiKey.trim();
+    const trimmed = inputValue.trim();
     if (!trimmed) {
       Alert.alert('Empty key', 'Please enter your Anthropic API key.');
       return;
     }
-    if (!trimmed.startsWith('sk-ant-')) {
+    if (!trimmed.startsWith('sk-ant-') || trimmed.length < MIN_KEY_LENGTH) {
       Alert.alert(
         'Invalid format',
-        'Anthropic API keys start with "sk-ant-". Double-check your key.',
-        [{ text: 'OK' }, { text: 'Save anyway', onPress: () => doSave(trimmed) }],
+        'That doesn\'t look like a valid Anthropic API key. Double-check it at console.anthropic.com.',
       );
       return;
     }
-    await doSave(trimmed);
-  };
-
-  const doSave = async (key: string) => {
-    await saveApiKey(key);
-    setHasExistingKey(true);
-    setSaved(true);
-    Alert.alert('Saved', 'Your API key has been saved.');
+    await saveApiKey(trimmed);
+    setInputValue('');
+    setHasKey(true);
+    Alert.alert('Saved', 'Your API key has been saved securely.');
   };
 
   const handleClear = () => {
@@ -63,17 +53,12 @@ export default function SettingsScreen() {
         style: 'destructive',
         onPress: async () => {
           await clearApiKey();
-          setApiKey('');
-          setHasExistingKey(false);
-          setSaved(false);
+          setInputValue('');
+          setHasKey(false);
         },
       },
     ]);
   };
-
-  const maskedKey = apiKey.length > 12
-    ? `${apiKey.substring(0, 10)}${'•'.repeat(Math.min(apiKey.length - 14, 20))}${apiKey.substring(apiKey.length - 4)}`
-    : apiKey;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -96,37 +81,39 @@ export default function SettingsScreen() {
               <Text style={styles.link}>console.anthropic.com</Text>
             </Text>
 
+            {hasKey && !inputValue && (
+              <View style={styles.keyExistsRow}>
+                <Text style={styles.keyExistsText}>✓ API key saved securely</Text>
+              </View>
+            )}
+
             <View style={styles.inputRow}>
               <TextInput
                 style={styles.input}
-                value={revealed ? apiKey : (saved ? maskedKey : apiKey)}
-                onChangeText={(text) => {
-                  setApiKey(text);
-                  setSaved(false);
-                }}
-                placeholder="sk-ant-..."
+                value={inputValue}
+                onChangeText={setInputValue}
+                placeholder={hasKey ? 'Enter new key to replace...' : 'sk-ant-...'}
                 placeholderTextColor={COLORS.textMuted}
-                secureTextEntry={!revealed && saved}
+                secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
-                onFocus={() => {
-                  if (saved) setRevealed(true);
-                }}
-                onBlur={() => setRevealed(false)}
+                autoComplete="off"
+                maxLength={200}
               />
             </View>
 
             <TouchableOpacity
-              style={[styles.saveButton, saved && hasExistingKey && styles.saveButtonSaved]}
+              style={[styles.saveButton, !inputValue && styles.saveButtonDisabled]}
               onPress={handleSave}
               activeOpacity={0.8}
+              disabled={!inputValue}
             >
               <Text style={styles.saveButtonText}>
-                {saved && hasExistingKey ? 'Key Saved ✓' : 'Save API Key'}
+                {hasKey ? 'Replace API Key' : 'Save API Key'}
               </Text>
             </TouchableOpacity>
 
-            {hasExistingKey && (
+            {hasKey && (
               <TouchableOpacity style={styles.clearButton} onPress={handleClear} activeOpacity={0.7}>
                 <Text style={styles.clearButtonText}>Remove Key</Text>
               </TouchableOpacity>
@@ -211,6 +198,16 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
+  keyExistsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  keyExistsText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.success,
+    fontWeight: '600',
+  },
   saveButton: {
     backgroundColor: COLORS.accent,
     borderRadius: 10,
@@ -218,10 +215,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.sm,
   },
-  saveButtonSaved: {
-    backgroundColor: '#1A3A1A',
-    borderWidth: 1,
-    borderColor: COLORS.success,
+  saveButtonDisabled: {
+    backgroundColor: COLORS.accentDark,
+    opacity: 0.5,
   },
   saveButtonText: {
     color: COLORS.text,
