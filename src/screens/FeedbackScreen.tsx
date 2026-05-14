@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 import { COLORS, FONT_SIZES, SPACING } from '../constants/theme';
 import { FEEDBACK_MODES } from '../constants/modes';
-import { getApiKey } from '../services/storage';
 import { getFeedback } from '../services/claude';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -39,28 +38,36 @@ const MAX_INPUT_CHARS = 4000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const RATE_LIMIT_MS = 3_000;
 
-// Strip null bytes, ASCII control chars, and dangerous Unicode (RTL overrides, zero-width chars)
+// Strip dangerous Unicode using only \uXXXX escapes — zero literal invisible chars in source.
+// Covers: null bytes, ASCII controls, soft hyphen, zero-width/directional/format chars,
+// line+paragraph separators, variation selectors, BOM, interlinear annotations,
+// and the Unicode tag block (U+E0000-U+E01EF) used in prompt-injection attacks.
 function sanitizeText(text: string): string {
   return text
-    .replace(/\0/g, '')
-    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    .replace(/[​-‏‪-‮⁠-⁤﻿]/g, '');
+    .replace(/\x00/g, '')
+    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')  // ASCII controls (keep \t \n \r)
+    .replace(/\u00AD/g, '')                                   // soft hyphen
+    .replace(/[\u200B-\u200F]/g, '')                         // zero-width + directional marks
+    .replace(/[\u202A-\u202E]/g, '')                         // LRE RLE PDF LRO RLO
+    .replace(/[\u2060-\u206F]/g, '')                         // word joiner + deprecated format
+    .replace(/[\u2028\u2029]/g, '\n')                        // line/paragraph separators -> \n
+    .replace(/[\uFE00-\uFE0F]/g, '')                         // variation selectors
+    .replace(/\uFEFF/g, '')                                   // BOM
+    .replace(/[\uFFF9-\uFFFD]/g, '')                         // interlinear annotations + specials
+    .replace(/[\u{E0000}-\u{E01EF}]/gu, '');                 // tag block + variation selectors supp.
 }
-
 function mapError(err: unknown): string {
   if (err instanceof Error && err.name === 'AbortError') {
-    if (err.message.toLowerCase().includes('timed out') || err.message.includes('timeout')) {
-      return 'Request timed out. Check your connection and try again.';
-    }
-    return '';
+    return err.message.toLowerCase().includes('timed out') || err.message.includes('timeout')
+      ? 'Request timed out. Check your connection and try again.'
+      : '';
   }
   const message = err instanceof Error ? err.message : '';
+  if (message === 'NO_API_KEY') return '';   // handled separately as an Alert
   if (message.includes('401') || message.toLowerCase().includes('authentication')) {
     return 'Invalid API key. Check your key in Settings.';
   }
-  if (message.includes('429')) {
-    return 'Rate limit reached. Wait a moment and try again.';
-  }
+  if (message.includes('429')) return 'Rate limit reached. Wait a moment and try again.';
   if (message.includes('500') || message.includes('529')) {
     return 'Anthropic servers are having issues. Try again shortly.';
   }
@@ -94,7 +101,6 @@ export default function FeedbackScreen({ navigation, route }: Props) {
     return () => sub.remove();
   }, []);
 
-  // Look up mode from local constants — never trust navigation params for the system prompt
   const mode = FEEDBACK_MODES.find((m) => m.id === modeId);
   if (!mode) {
     return (
@@ -105,7 +111,9 @@ export default function FeedbackScreen({ navigation, route }: Props) {
   }
 
   const handleGetFeedback = async () => {
+    // Lock synchronously BEFORE any await — closes the race window between tap and lock
     if (submittingRef.current) return;
+
     if (!input.trim()) {
       Alert.alert('Nothing to review', 'Please enter some text first.');
       return;
@@ -114,19 +122,6 @@ export default function FeedbackScreen({ navigation, route }: Props) {
     const now = Date.now();
     if (now - lastRequestRef.current < RATE_LIMIT_MS) {
       Alert.alert('Slow down', 'Please wait a moment before requesting again.');
-      return;
-    }
-
-    const apiKey = await getApiKey();
-    if (!apiKey) {
-      Alert.alert(
-        'API Key Required',
-        'You need to add your Anthropic API key in Settings before using the app.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Go to Settings', onPress: () => navigation.navigate('Settings') },
-        ],
-      );
       return;
     }
 
@@ -145,15 +140,28 @@ export default function FeedbackScreen({ navigation, route }: Props) {
     setFeedback('');
 
     try {
-      const sanitizedInput = sanitizeText(input.trim());
-      const result = await getFeedback(apiKey, mode.systemPrompt, sanitizedInput, controller.signal);
+      // Double-trim: sanitize strips control chars that trim() misses, then trim again
+      // in case stripping left only whitespace at the edges.
+      const sanitizedInput = sanitizeText(input.trim()).trim();
+      const result = await getFeedback(mode.systemPrompt, sanitizedInput, controller.signal);
       setFeedback(sanitizeText(result));
       setTimeout(() => {
         scrollRef.current?.scrollToEnd({ animated: true });
       }, 200);
     } catch (err: unknown) {
-      const mapped = mapError(err);
-      if (mapped) setError(mapped);
+      if (err instanceof Error && err.message === 'NO_API_KEY') {
+        Alert.alert(
+          'API Key Required',
+          'Add your Anthropic API key in Settings before using the app.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Go to Settings', onPress: () => navigation.navigate('Settings') },
+          ],
+        );
+      } else {
+        const mapped = mapError(err);
+        if (mapped) setError(mapped);
+      }
     } finally {
       clearTimeout(timeoutId);
       setLoading(false);
@@ -163,10 +171,10 @@ export default function FeedbackScreen({ navigation, route }: Props) {
 
   const renderFeedback = (text: string) => {
     const lines = text.split('\n');
-    return lines.map((line, i) => {
+    return lines.map((line, idx) => {
       if (line.startsWith('**') && line.endsWith('**')) {
         return (
-          <Text key={i} style={styles.sectionHeader}>
+          <Text key={idx} style={styles.sectionHeader}>
             {line.replace(/\*\*/g, '')}
           </Text>
         );
@@ -176,17 +184,17 @@ export default function FeedbackScreen({ navigation, route }: Props) {
         const header = parts[0].replace(/\*\*/g, '');
         const rest = parts[1] || '';
         return (
-          <Text key={i} style={styles.feedbackLine}>
+          <Text key={idx} style={styles.feedbackLine}>
             <Text style={styles.sectionHeaderInline}>{header}:</Text>
             {rest}
           </Text>
         );
       }
       if (line.trim() === '') {
-        return <View key={i} style={styles.spacer} />;
+        return <View key={idx} style={styles.spacer} />;
       }
       return (
-        <Text key={i} style={styles.feedbackLine}>
+        <Text key={idx} style={styles.feedbackLine}>
           {line}
         </Text>
       );
@@ -274,33 +282,16 @@ export default function FeedbackScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
+  safe: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: COLORS.background },
   content: {
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
     paddingBottom: SPACING.xxl,
   },
-  modeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
-  },
-  modeEmoji: {
-    fontSize: 28,
-    marginRight: SPACING.sm,
-  },
-  modeTitle: {
-    fontSize: FONT_SIZES.xl,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
+  modeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.lg },
+  modeEmoji: { fontSize: 28, marginRight: SPACING.sm },
+  modeTitle: { fontSize: FONT_SIZES.xl, fontWeight: '800', color: COLORS.text },
   promptLabel: {
     fontSize: FONT_SIZES.sm,
     color: COLORS.textSecondary,
@@ -335,13 +326,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     minHeight: 52,
   },
-  buttonDisabled: {
-    backgroundColor: COLORS.accentDark,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  buttonDisabled: { backgroundColor: COLORS.accentDark },
+  buttonRow: { flexDirection: 'row', alignItems: 'center' },
   buttonText: {
     color: COLORS.text,
     fontSize: FONT_SIZES.md,
@@ -356,14 +342,8 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginBottom: SPACING.md,
   },
-  errorText: {
-    color: COLORS.error,
-    fontSize: FONT_SIZES.sm,
-    lineHeight: FONT_SIZES.sm * 1.5,
-  },
-  feedbackBox: {
-    marginTop: SPACING.sm,
-  },
+  errorText: { color: COLORS.error, fontSize: FONT_SIZES.sm, lineHeight: FONT_SIZES.sm * 1.5 },
+  feedbackBox: { marginTop: SPACING.sm },
   feedbackDivider: {
     height: 2,
     backgroundColor: COLORS.accent,
@@ -395,12 +375,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 100,
   },
-  blurText: {
-    color: COLORS.textMuted,
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
-    letterSpacing: 1,
-  },
+  blurText: { color: COLORS.textMuted, fontSize: FONT_SIZES.sm, fontWeight: '600', letterSpacing: 1 },
   sectionHeader: {
     fontSize: FONT_SIZES.md,
     fontWeight: '800',
@@ -409,16 +384,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
     letterSpacing: 0.5,
   },
-  sectionHeaderInline: {
-    fontWeight: '800',
-    color: COLORS.accent,
-  },
-  feedbackLine: {
-    fontSize: FONT_SIZES.md,
-    color: COLORS.text,
-    lineHeight: FONT_SIZES.md * 1.6,
-  },
-  spacer: {
-    height: SPACING.xs,
-  },
+  sectionHeaderInline: { fontWeight: '800', color: COLORS.accent },
+  feedbackLine: { fontSize: FONT_SIZES.md, color: COLORS.text, lineHeight: FONT_SIZES.md * 1.6 },
+  spacer: { height: SPACING.xs },
 });
