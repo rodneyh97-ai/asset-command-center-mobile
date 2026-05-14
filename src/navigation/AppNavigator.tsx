@@ -8,11 +8,11 @@ import HomeScreen from '../screens/HomeScreen';
 import FeedbackScreen from '../screens/FeedbackScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { COLORS, FONT_SIZES, SPACING } from '../constants/theme';
-import { FeedbackMode } from '../constants/modes';
+import { FEEDBACK_MODES } from '../constants/modes';
 
 type HomeStackParamList = {
   Home: undefined;
-  Feedback: { mode: FeedbackMode };
+  Feedback: { modeId: string };
   Settings: undefined;
 };
 
@@ -45,10 +45,10 @@ function HomeStackNavigator() {
       <HomeStack.Screen
         name="Feedback"
         component={FeedbackScreen}
-        options={({ route }) => ({
-          title: route.params.mode.title,
-          headerBackTitle: 'Back',
-        })}
+        options={({ route }) => {
+          const mode = FEEDBACK_MODES.find((m) => m.id === route.params.modeId);
+          return { title: mode?.title ?? 'Feedback', headerBackTitle: 'Back' };
+        }}
       />
       <HomeStack.Screen
         name="Settings"

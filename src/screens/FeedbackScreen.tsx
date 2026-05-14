@@ -11,9 +11,11 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { COLORS, FONT_SIZES, SPACING } from '../constants/theme';
-import { FeedbackMode } from '../constants/modes';
+import { FEEDBACK_MODES } from '../constants/modes';
 import { getApiKey } from '../services/storage';
 import { getFeedback } from '../services/claude';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,7 +23,7 @@ import { RouteProp } from '@react-navigation/native';
 
 type RootStackParamList = {
   Home: undefined;
-  Feedback: { mode: FeedbackMode };
+  Feedback: { modeId: string };
   Settings: undefined;
 };
 
@@ -34,9 +36,24 @@ interface Props {
 }
 
 const MAX_INPUT_CHARS = 4000;
+const REQUEST_TIMEOUT_MS = 30_000;
+const RATE_LIMIT_MS = 3_000;
+
+// Strip null bytes, ASCII control chars, and dangerous Unicode (RTL overrides, zero-width chars)
+function sanitizeText(text: string): string {
+  return text
+    .replace(/\0/g, '')
+    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/[​-‏‪-‮⁠-⁤﻿]/g, '');
+}
 
 function mapError(err: unknown): string {
-  if (err instanceof Error && err.name === 'AbortError') return '';
+  if (err instanceof Error && err.name === 'AbortError') {
+    if (err.message.toLowerCase().includes('timed out') || err.message.includes('timeout')) {
+      return 'Request timed out. Check your connection and try again.';
+    }
+    return '';
+  }
   const message = err instanceof Error ? err.message : '';
   if (message.includes('401') || message.toLowerCase().includes('authentication')) {
     return 'Invalid API key. Check your key in Settings.';
@@ -54,21 +71,49 @@ function mapError(err: unknown): string {
 }
 
 export default function FeedbackScreen({ navigation, route }: Props) {
-  const { mode } = route.params;
+  const { modeId } = route.params;
+
   const [input, setInput] = useState('');
   const [feedback, setFeedback] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isBackground, setIsBackground] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const submittingRef = useRef(false);
+  const lastRequestRef = useRef<number>(0);
 
   useEffect(() => {
     return () => { abortRef.current?.abort(); };
   }, []);
 
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      setIsBackground(state !== 'active');
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Look up mode from local constants — never trust navigation params for the system prompt
+  const mode = FEEDBACK_MODES.find((m) => m.id === modeId);
+  if (!mode) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <Text style={{ color: COLORS.error, padding: SPACING.lg }}>Invalid mode.</Text>
+      </SafeAreaView>
+    );
+  }
+
   const handleGetFeedback = async () => {
+    if (submittingRef.current) return;
     if (!input.trim()) {
       Alert.alert('Nothing to review', 'Please enter some text first.');
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastRequestRef.current < RATE_LIMIT_MS) {
+      Alert.alert('Slow down', 'Please wait a moment before requesting again.');
       return;
     }
 
@@ -85,17 +130,24 @@ export default function FeedbackScreen({ navigation, route }: Props) {
       return;
     }
 
+    submittingRef.current = true;
+    lastRequestRef.current = now;
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const timeoutId = setTimeout(() => {
+      controller.abort(new Error('Request timed out.'));
+    }, REQUEST_TIMEOUT_MS);
 
     setLoading(true);
     setError('');
     setFeedback('');
 
     try {
-      const result = await getFeedback(apiKey, mode.systemPrompt, input.trim(), controller.signal);
-      setFeedback(result);
+      const sanitizedInput = sanitizeText(input.trim());
+      const result = await getFeedback(apiKey, mode.systemPrompt, sanitizedInput, controller.signal);
+      setFeedback(sanitizeText(result));
       setTimeout(() => {
         scrollRef.current?.scrollToEnd({ animated: true });
       }, 200);
@@ -103,7 +155,9 @@ export default function FeedbackScreen({ navigation, route }: Props) {
       const mapped = mapError(err);
       if (mapped) setError(mapped);
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 
@@ -153,16 +207,13 @@ export default function FeedbackScreen({ navigation, route }: Props) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Mode header */}
           <View style={styles.modeHeader}>
             <Text style={styles.modeEmoji}>{mode.emoji}</Text>
             <Text style={styles.modeTitle}>{mode.title}</Text>
           </View>
 
-          {/* Prompt label */}
           <Text style={styles.promptLabel}>{mode.prompt}</Text>
 
-          {/* Text input */}
           <TextInput
             style={styles.textInput}
             multiline
@@ -175,7 +226,12 @@ export default function FeedbackScreen({ navigation, route }: Props) {
             maxLength={MAX_INPUT_CHARS}
           />
 
-          {/* CTA button */}
+          {input.length >= MAX_INPUT_CHARS * 0.9 && (
+            <Text style={styles.charWarning}>
+              {input.length}/{MAX_INPUT_CHARS} characters
+            </Text>
+          )}
+
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleGetFeedback}
@@ -192,19 +248,23 @@ export default function FeedbackScreen({ navigation, route }: Props) {
             )}
           </TouchableOpacity>
 
-          {/* Error state */}
           {error ? (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
 
-          {/* Feedback response */}
           {feedback ? (
             <View style={styles.feedbackBox}>
               <View style={styles.feedbackDivider} />
               <Text style={styles.feedbackLabel}>HONEST FEEDBACK</Text>
-              <View style={styles.feedbackContent}>{renderFeedback(feedback)}</View>
+              {isBackground ? (
+                <View style={styles.blurOverlay}>
+                  <Text style={styles.blurText}>Content hidden</Text>
+                </View>
+              ) : (
+                <View style={styles.feedbackContent}>{renderFeedback(feedback)}</View>
+              )}
             </View>
           ) : null}
         </ScrollView>
@@ -257,7 +317,13 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     minHeight: 160,
     lineHeight: FONT_SIZES.md * 1.5,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  charWarning: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+    textAlign: 'right',
+    marginBottom: SPACING.sm,
   },
   button: {
     backgroundColor: COLORS.accent,
@@ -318,6 +384,22 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 12,
     padding: SPACING.md,
+  },
+  blurOverlay: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    padding: SPACING.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 100,
+  },
+  blurText: {
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    letterSpacing: 1,
   },
   sectionHeader: {
     fontSize: FONT_SIZES.md,

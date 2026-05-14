@@ -39,10 +39,15 @@ export default function SettingsScreen() {
       );
       return;
     }
-    await saveApiKey(trimmed);
-    setInputValue('');
-    setHasKey(true);
-    Alert.alert('Saved', 'Your API key has been saved securely.');
+    try {
+      await saveApiKey(trimmed);
+      setInputValue('');
+      setHasKey(true);
+      Alert.alert('Saved', 'Your API key has been saved securely.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save API key.';
+      Alert.alert('Error', msg);
+    }
   };
 
   const handleClear = () => {
@@ -52,9 +57,14 @@ export default function SettingsScreen() {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          await clearApiKey();
-          setInputValue('');
-          setHasKey(false);
+          try {
+            await clearApiKey();
+            setInputValue('');
+            setHasKey(false);
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Failed to remove API key.';
+            Alert.alert('Error', msg);
+          }
         },
       },
     ]);

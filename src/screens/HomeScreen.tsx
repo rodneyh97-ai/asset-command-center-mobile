@@ -13,7 +13,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 type RootStackParamList = {
   Home: undefined;
-  Feedback: { mode: FeedbackMode };
+  Feedback: { modeId: string };
   Settings: undefined;
 };
 
@@ -46,7 +46,7 @@ export default function HomeScreen({ navigation }: Props) {
             <TouchableOpacity
               key={mode.id}
               style={styles.card}
-              onPress={() => navigation.navigate('Feedback', { mode })}
+              onPress={() => navigation.navigate('Feedback', { modeId: mode.id })}
               activeOpacity={0.75}
             >
               <Text style={styles.cardEmoji}>{mode.emoji}</Text>
