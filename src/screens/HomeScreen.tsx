@@ -8,7 +8,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { COLORS, FONT_SIZES, SPACING } from '../constants/theme';
-import { FEEDBACK_MODES, FeedbackMode } from '../constants/modes';
+import { FEEDBACK_MODES } from '../constants/modes';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 type RootStackParamList = {

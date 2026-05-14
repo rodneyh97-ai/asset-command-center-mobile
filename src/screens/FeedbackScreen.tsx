@@ -56,14 +56,18 @@ function sanitizeText(text: string): string {
     .replace(/[\uFFF9-\uFFFD]/g, '')                         // interlinear annotations + specials
     .replace(/[\u{E0000}-\u{E01EF}]/gu, '');                 // tag block + variation selectors supp.
 }
+// Anthropic SDK wraps all signal aborts as APIUserAbortError (not the Web API AbortError).
+// Abort classification (timeout vs. user-triggered) is done via timedOutRef in the component.
+function isAbortError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.name === 'APIUserAbortError' || err.name === 'AbortError')
+  );
+}
+
 function mapError(err: unknown): string {
-  if (err instanceof Error && err.name === 'AbortError') {
-    return err.message.toLowerCase().includes('timed out') || err.message.includes('timeout')
-      ? 'Request timed out. Check your connection and try again.'
-      : '';
-  }
   const message = err instanceof Error ? err.message : '';
-  if (message === 'NO_API_KEY') return '';   // handled separately as an Alert
+  if (message === 'NO_API_KEY') return '';
   if (message.includes('401') || message.toLowerCase().includes('authentication')) {
     return 'Invalid API key. Check your key in Settings.';
   }
@@ -89,6 +93,7 @@ export default function FeedbackScreen({ navigation, route }: Props) {
   const abortRef = useRef<AbortController | null>(null);
   const submittingRef = useRef(false);
   const lastRequestRef = useRef<number>(0);
+  const timedOutRef = useRef(false);
 
   useEffect(() => {
     return () => { abortRef.current?.abort(); };
@@ -127,12 +132,14 @@ export default function FeedbackScreen({ navigation, route }: Props) {
 
     submittingRef.current = true;
     lastRequestRef.current = now;
+    timedOutRef.current = false;
 
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     const timeoutId = setTimeout(() => {
-      controller.abort(new Error('Request timed out.'));
+      timedOutRef.current = true;
+      controller.abort();
     }, REQUEST_TIMEOUT_MS);
 
     setLoading(true);
@@ -158,6 +165,11 @@ export default function FeedbackScreen({ navigation, route }: Props) {
             { text: 'Go to Settings', onPress: () => navigation.navigate('Settings') },
           ],
         );
+      } else if (isAbortError(err)) {
+        if (timedOutRef.current) {
+          setError('Request timed out. Check your connection and try again.');
+        }
+        // else: user-triggered abort (unmount or new request started) — suppress
       } else {
         const mapped = mapError(err);
         if (mapped) setError(mapped);
