@@ -164,7 +164,7 @@ export default function SettingsScreen() {
             </Text>
           </View>
 
-          <Text style={styles.version}>No BS AI · v1.0.0</Text>
+          <Text style={styles.version}>RealityCheck AI · v1.0.0</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

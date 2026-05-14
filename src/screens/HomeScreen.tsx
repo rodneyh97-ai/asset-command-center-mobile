@@ -33,10 +33,10 @@ export default function HomeScreen({ navigation }: Props) {
       >
         {/* Hero section */}
         <View style={styles.hero}>
-          <Text style={styles.brandTag}>NO BS AI</Text>
-          <Text style={styles.heroTitle}>No BS.{'\n'}Just Truth.</Text>
+          <Text style={styles.brandTag}>REALITYCHECK AI</Text>
+          <Text style={styles.heroTitle}>Truth before{'\n'}reality does.</Text>
           <Text style={styles.heroSubtitle}>
-            Pick a category. Get honest feedback.{'\n'}No fluff. No sugarcoating.
+            Bring your ideas, plans, decisions, and moves.{'\n'}Get honest feedback before it's too late.
           </Text>
         </View>
 
@@ -56,7 +56,7 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
 
         <Text style={styles.footer}>
-          Powered by Claude. Set your API key in Settings.
+          Powered by Claude · Add your API key in Settings
         </Text>
       </ScrollView>
     </SafeAreaView>
