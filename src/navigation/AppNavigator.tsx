@@ -6,6 +6,7 @@ import { Text, View, StyleSheet } from 'react-native';
 
 import HomeScreen from '../screens/HomeScreen';
 import FeedbackScreen from '../screens/FeedbackScreen';
+import HistoryScreen from '../screens/HistoryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { COLORS, FONT_SIZES, SPACING } from '../constants/theme';
 import { FEEDBACK_MODES } from '../constants/modes';
@@ -90,6 +91,14 @@ export default function AppNavigator() {
           options={{
             tabBarLabel: 'Home',
             tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" focused={focused} />,
+          }}
+        />
+        <Tab.Screen
+          name="HistoryTab"
+          component={HistoryScreen}
+          options={{
+            tabBarLabel: 'History',
+            tabBarIcon: ({ focused }) => <TabIcon emoji="📋" focused={focused} />,
           }}
         />
         <Tab.Screen

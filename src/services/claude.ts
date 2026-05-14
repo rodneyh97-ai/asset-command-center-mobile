@@ -48,7 +48,7 @@ export async function getFeedback(
   const response = await client.messages.create(
     {
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: fullSystemPrompt,
       messages: [{ role: 'user', content: wrappedInput }],
     },
