@@ -55,9 +55,7 @@ export default function HomeScreen({ navigation }: Props) {
           ))}
         </View>
 
-        <Text style={styles.footer}>
-          Powered by Claude · Add your API key in Settings
-        </Text>
+        <Text style={styles.footer}>Powered by Claude (Anthropic)</Text>
       </ScrollView>
     </SafeAreaView>
   );

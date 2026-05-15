@@ -1,0 +1,22 @@
+name = "realitycheck-proxy"
+main = "src/worker.ts"
+compatibility_date = "2024-09-23"
+
+# ── KV namespace ─────────────────────────────────────────────────────────────
+# Run: wrangler kv:namespace create RATE_LIMIT_KV
+# Then paste the returned IDs below.
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_KV_NAMESPACE_PREVIEW_ID"
+
+# ── Cron: weekly self-analysis ────────────────────────────────────────────────
+# Runs every Monday at 09:00 UTC — Claude analyzes usage + suggestions,
+# stores insights for owner review at GET /admin/insights/latest
+[triggers]
+crons = ["0 9 * * 1"]
+
+# ── Secrets (set via CLI, never stored here) ──────────────────────────────────
+#   wrangler secret put ANTHROPIC_API_KEY
+#   wrangler secret put APP_SECRET          ← must match src/constants/config.ts
+#   wrangler secret put ADMIN_SECRET        ← owner-only, never in app binary

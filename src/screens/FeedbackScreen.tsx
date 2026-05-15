@@ -21,18 +21,20 @@ import { COLORS, FONT_SIZES, SPACING } from '../constants/theme';
 import { FEEDBACK_MODES } from '../constants/modes';
 import { getFeedback, FeedbackResult } from '../services/claude';
 import { saveEntry } from '../services/history';
+import { canMakeCheck, recordCheck, markRateLimited, getRemainingChecks } from '../services/usage';
+import { trackShareEvent } from '../services/suggestions';
 import ResultCard from '../components/ResultCard';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 
-type RootStackParamList = {
+type HomeStackParamList = {
   Home: undefined;
   Feedback: { modeId: string };
   Settings: undefined;
 };
 
-type FeedbackScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Feedback'>;
-type FeedbackScreenRouteProp = RouteProp<RootStackParamList, 'Feedback'>;
+type FeedbackScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'Feedback'>;
+type FeedbackScreenRouteProp = RouteProp<HomeStackParamList, 'Feedback'>;
 
 interface Props {
   navigation: FeedbackScreenNavigationProp;
@@ -62,25 +64,18 @@ function sanitizeText(text: string): string {
     .replace(/[\u{E0000}-\u{E01EF}]/gu, '');
 }
 
-// Anthropic SDK wraps all signal aborts as APIUserAbortError (not the Web API AbortError).
-// Abort classification (timeout vs. user-triggered) is done via timedOutRef in the component.
 function isAbortError(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    (err.name === 'APIUserAbortError' || err.name === 'AbortError')
-  );
+  return err instanceof Error && (err.name === 'APIUserAbortError' || err.name === 'AbortError');
 }
 
 function mapError(err: unknown): string {
   const message = err instanceof Error ? err.message : '';
-  if (message === 'NO_API_KEY') return '';
+  if (message === 'RATE_LIMITED') return '';
   if (message === 'PARSE_ERROR') return "Couldn't read the response. Please try again.";
-  if (message.includes('401') || message.toLowerCase().includes('authentication')) {
-    return 'Invalid API key. Check your key in Settings.';
-  }
-  if (message.includes('429')) return 'Rate limit reached. Wait a moment and try again.';
+  if (message.includes('401')) return 'App authorization failed. Please update the app.';
+  if (message.includes('429')) return 'Server busy. Wait a moment and try again.';
   if (message.includes('500') || message.includes('529')) {
-    return 'Anthropic servers are having issues. Try again shortly.';
+    return 'AI servers are having issues. Try again shortly.';
   }
   if (message.toLowerCase().includes('network') || message.toLowerCase().includes('fetch')) {
     return 'Network error. Check your connection and try again.';
@@ -122,6 +117,7 @@ export default function FeedbackScreen({ navigation, route }: Props) {
   const [result, setResult] = useState<FeedbackResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [remaining, setRemaining] = useState<number | null>(null);
   const [isBackground, setIsBackground] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const cardRef = useRef<View>(null);
@@ -131,6 +127,7 @@ export default function FeedbackScreen({ navigation, route }: Props) {
   const timedOutRef = useRef(false);
 
   useEffect(() => {
+    getRemainingChecks().then(setRemaining);
     return () => { abortRef.current?.abort(); };
   }, []);
 
@@ -151,7 +148,6 @@ export default function FeedbackScreen({ navigation, route }: Props) {
   }
 
   const handleGetFeedback = async () => {
-    // Lock synchronously BEFORE any await — closes the race window between tap and lock
     if (submittingRef.current) return;
 
     if (!input.trim()) {
@@ -162,6 +158,13 @@ export default function FeedbackScreen({ navigation, route }: Props) {
     const now = Date.now();
     if (now - lastRequestRef.current < RATE_LIMIT_MS) {
       Alert.alert('Slow down', 'Please wait a moment before requesting again.');
+      return;
+    }
+
+    // Gate: check usage before burning a network request
+    const allowed = await canMakeCheck();
+    if (!allowed) {
+      (navigation as any).navigate('Paywall');
       return;
     }
 
@@ -182,11 +185,11 @@ export default function FeedbackScreen({ navigation, route }: Props) {
     setResult(null);
 
     try {
-      // Double-trim: sanitize strips control chars that trim() misses, then trim again
-      // in case stripping left only whitespace at the edges.
       const sanitizedInput = sanitizeText(input.trim()).trim();
-      const feedbackResult = await getFeedback(mode.systemPrompt, sanitizedInput, controller.signal);
+      const feedbackResult = await getFeedback(mode.id, mode.systemPrompt, sanitizedInput, controller.signal);
       setResult(feedbackResult);
+      await recordCheck();
+      getRemainingChecks().then(setRemaining);
       saveEntry({
         id: String(Date.now()),
         timestamp: Date.now(),
@@ -200,20 +203,14 @@ export default function FeedbackScreen({ navigation, route }: Props) {
         scrollRef.current?.scrollToEnd({ animated: true });
       }, 200);
     } catch (err: unknown) {
-      if (err instanceof Error && err.message === 'NO_API_KEY') {
-        Alert.alert(
-          'API Key Required',
-          'Add your Anthropic API key in Settings before using the app.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Go to Settings', onPress: () => navigation.navigate('Settings') },
-          ],
-        );
-      } else if (isAbortError(err)) {
+      if (isAbortError(err)) {
         if (timedOutRef.current) {
           setError('Request timed out. Check your connection and try again.');
         }
-        // else: user-triggered abort (unmount or new request started) — suppress
+      } else if (err instanceof Error && err.message === 'RATE_LIMITED') {
+        await markRateLimited();
+        setRemaining(0);
+        (navigation as any).navigate('Paywall');
       } else {
         const mapped = mapError(err);
         if (mapped) setError(mapped);
@@ -227,19 +224,25 @@ export default function FeedbackScreen({ navigation, route }: Props) {
 
   const handleShare = async () => {
     if (!result) return;
+    trackShareEvent(mode.id);
     try {
-      // Try visual share (requires native module — works in EAS/production builds)
       const uri = await captureRef(cardRef, { format: 'png', quality: 1.0, result: 'tmpfile' });
       await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share Reality Check' });
     } catch {
-      // Fall back to text share (e.g., in Expo Go where view capture is unavailable)
       try {
         await Share.share({ message: formatShareText(result, mode.title) });
       } catch {
-        // Share dialog dismissed or unavailable — no action needed
+        // Share dialog dismissed — no action needed
       }
     }
   };
+
+  const remainingLabel =
+    remaining === null
+      ? 'Unlimited checks'
+      : remaining === 0
+      ? 'Daily limit reached'
+      : `${remaining} check${remaining === 1 ? '' : 's'} left today`;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -295,6 +298,10 @@ export default function FeedbackScreen({ navigation, route }: Props) {
               <Text style={styles.buttonText}>Get Honest Feedback</Text>
             )}
           </TouchableOpacity>
+
+          <Text style={[styles.remainingLabel, remaining === 0 && styles.remainingLabelWarn]}>
+            {remainingLabel}
+          </Text>
 
           {error ? (
             <View style={styles.errorBox}>
@@ -372,7 +379,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.xs,
     minHeight: 52,
   },
   buttonDisabled: { backgroundColor: COLORS.accentDark },
@@ -383,6 +390,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.5,
   },
+  remainingLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginBottom: SPACING.md,
+  },
+  remainingLabelWarn: { color: COLORS.error },
   errorBox: {
     backgroundColor: '#2A1010',
     borderWidth: 1,

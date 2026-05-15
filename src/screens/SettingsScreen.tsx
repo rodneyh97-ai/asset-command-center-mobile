@@ -1,101 +1,83 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   SafeAreaView,
+  ScrollView,
   Alert,
+  TextInput,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
-  AppState,
-  AppStateStatus,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, FONT_SIZES, SPACING } from '../constants/theme';
-import { hasApiKey, saveApiKey, clearApiKey } from '../services/storage';
-
-const MIN_KEY_LENGTH = 40;
+import { FREE_DAILY_LIMIT } from '../constants/config';
+import { getUsageCount, getRemainingChecks, isPremium } from '../services/usage';
+import { submitSuggestion } from '../services/suggestions';
 
 export default function SettingsScreen() {
-  const [inputValue, setInputValue] = useState('');
-  const [hasKey, setHasKey] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [isBackground, setIsBackground] = useState(false);
+  const navigation = useNavigation();
+  const [usageCount, setUsageCount] = useState(0);
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const [premium, setPremium] = useState(false);
+  const [suggestionTitle, setSuggestionTitle] = useState('');
+  const [suggestionDesc, setSuggestionDesc] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    hasApiKey().then((exists) => { if (active) setHasKey(exists); });
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
-      setIsBackground(state !== 'active');
-    });
-    return () => sub.remove();
-  }, []);
-
-  const handleSave = async () => {
-    if (saving) return;
-
-    // Strip ALL whitespace — not just ends. A pasted key with an accidental internal
-    // newline or space would otherwise silently save as a broken key.
-    const cleaned = inputValue.replace(/\s/g, '');
-    if (!cleaned) {
-      Alert.alert('Empty key', 'Please enter your Anthropic API key.');
-      return;
-    }
-    if (!cleaned.startsWith('sk-ant-') || cleaned.length < MIN_KEY_LENGTH) {
-      Alert.alert(
-        'Invalid format',
-        "That doesn't look like a valid Anthropic API key. Double-check it at console.anthropic.com.",
-      );
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await saveApiKey(cleaned);
-      setInputValue('');
-      setHasKey(true);
-      Alert.alert('Saved', 'Your API key has been saved securely.');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to save API key.';
-      Alert.alert('Error', msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleClear = () => {
-    Alert.alert('Remove API Key', 'This will delete your saved API key. Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await clearApiKey();
-            setInputValue('');
-            setHasKey(false);
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Failed to remove API key.';
-            Alert.alert('Error', msg);
-          }
+  useFocusEffect(
+    useCallback(() => {
+      Promise.all([getUsageCount(), getRemainingChecks(), isPremium()]).then(
+        ([count, rem, prem]) => {
+          setUsageCount(count);
+          setRemaining(rem);
+          setPremium(prem);
         },
-      },
-    ]);
+      );
+    }, []),
+  );
+
+  const handleSuggestMode = async () => {
+    if (submitting) return;
+    const t = suggestionTitle.trim();
+    const d = suggestionDesc.trim();
+
+    if (t.length < 3) {
+      Alert.alert('Too short', 'Give your mode a name (at least 3 characters).');
+      return;
+    }
+    if (d.length < 10) {
+      Alert.alert('Too short', 'Describe what the mode should do (at least 10 characters).');
+      return;
+    }
+
+    setSubmitting(true);
+    const result = await submitSuggestion({ title: t, description: d });
+    setSubmitting(false);
+
+    if (result.ok) {
+      setSuggestionTitle('');
+      setSuggestionDesc('');
+      Alert.alert(
+        'Suggestion Sent!',
+        'Thanks. Popular suggestions get reviewed weekly and added to the app.',
+        [{ text: 'Great' }],
+      );
+    } else {
+      const msg =
+        result.error === 'SUGGESTION_LIMIT'
+          ? 'You\'ve sent 3 suggestions today. Come back tomorrow!'
+          : 'Could not submit. Check your connection and try again.';
+      Alert.alert('Could not submit', msg);
+    }
   };
 
-  const saveDisabled = !inputValue || saving;
+  const usagePercent = FREE_DAILY_LIMIT > 0 ? (usageCount / FREE_DAILY_LIMIT) * 100 : 0;
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Full-screen overlay when backgrounded — hides key input from app switcher */}
-      {isBackground && <View style={styles.backgroundOverlay} />}
-
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -104,67 +86,108 @@ export default function SettingsScreen() {
           style={styles.container}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <Text style={styles.title}>Settings</Text>
 
+          {/* Usage */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>ANTHROPIC API KEY</Text>
-            <Text style={styles.sectionDesc}>
-              Get your key at{' '}
-              <Text style={styles.link}>console.anthropic.com</Text>
-            </Text>
-
-            {hasKey && !inputValue && (
-              <View style={styles.keyExistsRow}>
-                <Text style={styles.keyExistsText}>✓ API key saved securely</Text>
+            <Text style={styles.sectionLabel}>TODAY'S USAGE</Text>
+            {premium ? (
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Status</Text>
+                <Text style={[styles.rowValue, { color: '#4CAF50' }]}>Unlimited ✓</Text>
               </View>
+            ) : (
+              <>
+                <View style={styles.row}>
+                  <Text style={styles.rowLabel}>Checks used</Text>
+                  <Text style={styles.rowValue}>
+                    {usageCount} of {FREE_DAILY_LIMIT}
+                  </Text>
+                </View>
+                <View style={styles.progressTrack}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: `${Math.min(usagePercent, 100)}%` as `${number}%`,
+                        backgroundColor: usagePercent >= 100 ? COLORS.error : COLORS.accent,
+                      },
+                    ]}
+                  />
+                </View>
+                {remaining === 0 ? (
+                  <Text style={styles.limitNote}>Limit reached — resets at midnight</Text>
+                ) : (
+                  <Text style={styles.limitNote}>
+                    {remaining} check{remaining === 1 ? '' : 's'} left today · resets at midnight
+                  </Text>
+                )}
+                <TouchableOpacity
+                  style={styles.upgradeButton}
+                  onPress={() => navigation.navigate('Paywall' as never)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.upgradeButtonText}>Get Unlimited Access →</Text>
+                </TouchableOpacity>
+              </>
             )}
+          </View>
 
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.input}
-                value={inputValue}
-                onChangeText={setInputValue}
-                placeholder={hasKey ? 'Enter new key to replace...' : 'sk-ant-...'}
-                placeholderTextColor={COLORS.textMuted}
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="off"
-                maxLength={200}
-              />
-            </View>
-
+          {/* Suggest a Mode */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>SUGGEST A MODE</Text>
+            <Text style={styles.sectionDesc}>
+              Have an idea for a new reality check? Top suggestions get added to the app.
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={suggestionTitle}
+              onChangeText={setSuggestionTitle}
+              placeholder="Mode name (e.g. Cover Letter Review)"
+              placeholderTextColor={COLORS.textMuted}
+              maxLength={100}
+              editable={!submitting}
+            />
+            <TextInput
+              style={[styles.input, styles.inputMulti]}
+              value={suggestionDesc}
+              onChangeText={setSuggestionDesc}
+              placeholder="What should it do? What kind of feedback should it give?"
+              placeholderTextColor={COLORS.textMuted}
+              maxLength={500}
+              multiline
+              textAlignVertical="top"
+              editable={!submitting}
+            />
             <TouchableOpacity
-              style={[styles.saveButton, saveDisabled && styles.saveButtonDisabled]}
-              onPress={handleSave}
-              activeOpacity={0.8}
-              disabled={saveDisabled}
+              style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+              onPress={handleSuggestMode}
+              activeOpacity={0.85}
+              disabled={submitting}
             >
-              <Text style={styles.saveButtonText}>
-                {saving ? 'Saving...' : hasKey ? 'Replace API Key' : 'Save API Key'}
+              <Text style={styles.submitButtonText}>
+                {submitting ? 'Submitting...' : 'Submit Suggestion'}
               </Text>
             </TouchableOpacity>
-
-            {hasKey && (
-              <TouchableOpacity style={styles.clearButton} onPress={handleClear} activeOpacity={0.7}>
-                <Text style={styles.clearButtonText}>Remove Key</Text>
-              </TouchableOpacity>
-            )}
           </View>
 
-          <View style={styles.infoSection}>
-            <Text style={styles.infoTitle}>How it works</Text>
-            <Text style={styles.infoText}>
-              Your API key is stored in your device's secure enclave (iOS Keychain / Android Keystore).
-              It never leaves your device except to call Anthropic's API directly.
-            </Text>
-            <Text style={styles.infoText}>
-              Usage is billed to your Anthropic account. Each request uses roughly 500–2000 tokens.
-            </Text>
+          {/* About */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>ABOUT</Text>
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>Version</Text>
+              <Text style={styles.rowValue}>1.0.0</Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>Powered by</Text>
+              <Text style={styles.rowValue}>Claude (Anthropic)</Text>
+            </View>
           </View>
 
-          <Text style={styles.version}>RealityCheck AI · v1.0.0</Text>
+          <Text style={styles.footer}>RealityCheck AI</Text>
+          <Text style={styles.footerSub}>AI that tells you the truth before reality does.</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -173,12 +196,7 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
-  backgroundOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.background,
-    zIndex: 999,
-  },
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1 },
   content: {
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
@@ -203,16 +221,42 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 2,
     color: COLORS.accent,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.sm,
   },
   sectionDesc: {
     fontSize: FONT_SIZES.sm,
     color: COLORS.textSecondary,
-    marginBottom: SPACING.md,
     lineHeight: FONT_SIZES.sm * 1.5,
+    marginBottom: SPACING.md,
   },
-  link: { color: COLORS.accent, textDecorationLine: 'underline' },
-  inputRow: { marginBottom: SPACING.md },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  rowLabel: { fontSize: FONT_SIZES.sm, color: COLORS.textSecondary },
+  rowValue: { fontSize: FONT_SIZES.sm, color: COLORS.text, fontWeight: '600' },
+  progressTrack: {
+    height: 6,
+    backgroundColor: COLORS.border,
+    borderRadius: 3,
+    marginVertical: SPACING.sm,
+    overflow: 'hidden',
+  },
+  progressFill: { height: 6, borderRadius: 3 },
+  limitNote: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+    marginBottom: SPACING.md,
+  },
+  upgradeButton: {
+    backgroundColor: COLORS.accent,
+    borderRadius: 10,
+    paddingVertical: SPACING.sm + 2,
+    alignItems: 'center',
+  },
+  upgradeButtonText: { color: COLORS.text, fontSize: FONT_SIZES.sm, fontWeight: '800', letterSpacing: 0.3 },
   input: {
     backgroundColor: COLORS.background,
     borderWidth: 1,
@@ -222,33 +266,29 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm + 2,
     color: COLORS.text,
     fontSize: FONT_SIZES.sm,
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    marginBottom: SPACING.sm,
   },
-  keyExistsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.sm },
-  keyExistsText: { fontSize: FONT_SIZES.sm, color: COLORS.success, fontWeight: '600' },
-  saveButton: {
+  inputMulti: { minHeight: 80, lineHeight: FONT_SIZES.sm * 1.5 },
+  submitButton: {
     backgroundColor: COLORS.accent,
     borderRadius: 10,
-    paddingVertical: SPACING.sm + 4,
+    paddingVertical: SPACING.sm + 2,
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginTop: SPACING.xs,
   },
-  saveButtonDisabled: { backgroundColor: COLORS.accentDark, opacity: 0.5 },
-  saveButtonText: { color: COLORS.text, fontSize: FONT_SIZES.md, fontWeight: '700' },
-  clearButton: { alignItems: 'center', paddingVertical: SPACING.xs },
-  clearButtonText: { color: COLORS.error, fontSize: FONT_SIZES.sm, fontWeight: '600' },
-  infoSection: { marginBottom: SPACING.xl },
-  infoTitle: {
-    fontSize: FONT_SIZES.md,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: SPACING.sm,
-  },
-  infoText: {
+  submitButtonDisabled: { opacity: 0.5 },
+  submitButtonText: { color: COLORS.text, fontSize: FONT_SIZES.sm, fontWeight: '700' },
+  footer: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
-    lineHeight: FONT_SIZES.sm * 1.6,
-    marginBottom: SPACING.sm,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    fontWeight: '700',
+    marginBottom: 2,
   },
-  version: { fontSize: FONT_SIZES.xs, color: COLORS.textMuted, textAlign: 'center' },
+  footerSub: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
 });
