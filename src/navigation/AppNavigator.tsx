@@ -20,7 +20,6 @@ export type RootStackParamList = {
 type HomeStackParamList = {
   Home: undefined;
   Feedback: { modeId: string };
-  Settings: undefined;
 };
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -47,7 +46,6 @@ function HomeStackNavigator() {
           return { title: mode?.title ?? 'Feedback', headerBackTitle: 'Back' };
         }}
       />
-      <HomeStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
     </HomeStack.Navigator>
   );
 }

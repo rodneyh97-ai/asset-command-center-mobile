@@ -12,14 +12,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, FONT_SIZES, SPACING } from '../constants/theme';
 import { loadHistory, deleteEntry, clearHistory, HistoryEntry } from '../services/history';
 import ResultCard from '../components/ResultCard';
-
-function gradeColor(grade: string): string {
-  if (grade === 'A+' || grade === 'A' || grade === 'A-') return '#4CAF50';
-  if (grade === 'B+' || grade === 'B' || grade === 'B-') return '#2196F3';
-  if (grade === 'C+' || grade === 'C' || grade === 'C-') return '#FF9800';
-  if (grade === 'D') return '#F44336';
-  return '#B71C1C';
-}
+import { gradeColor } from '../utils/gradeColor';
 
 function formatDate(ts: number): string {
   const d = new Date(ts);
@@ -112,9 +105,16 @@ export default function HistoryScreen() {
         </TouchableOpacity>
 
         {!expanded && (
-          <Text style={styles.entryPreview} numberOfLines={2}>
-            &ldquo;{item.result.verdict}&rdquo;
-          </Text>
+          <>
+            {!!item.inputPreview && (
+              <Text style={styles.entryInput} numberOfLines={1}>
+                {item.inputPreview}
+              </Text>
+            )}
+            <Text style={styles.entryPreview} numberOfLines={2}>
+              &ldquo;{item.result.verdict}&rdquo;
+            </Text>
+          </>
         )}
 
         {expanded && (
@@ -208,8 +208,15 @@ const styles = StyleSheet.create({
   gradePillText: { fontSize: FONT_SIZES.sm, fontWeight: '800' },
   deleteButton: { padding: 4 },
   deleteButtonText: { fontSize: 20, color: COLORS.textMuted, lineHeight: 22 },
+  entryInput: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.xs,
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+  },
   entryPreview: {
     paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.xs,
     paddingBottom: SPACING.md,
     fontSize: FONT_SIZES.sm,
     color: COLORS.textSecondary,

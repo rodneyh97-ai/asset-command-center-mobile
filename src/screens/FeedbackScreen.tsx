@@ -30,7 +30,6 @@ import { RouteProp } from '@react-navigation/native';
 type HomeStackParamList = {
   Home: undefined;
   Feedback: { modeId: string };
-  Settings: undefined;
 };
 
 type FeedbackScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'Feedback'>;
@@ -117,7 +116,7 @@ export default function FeedbackScreen({ navigation, route }: Props) {
   const [result, setResult] = useState<FeedbackResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [remaining, setRemaining] = useState<number | null>(null);
+  const [remaining, setRemaining] = useState<number | null | undefined>(undefined);
   const [isBackground, setIsBackground] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const cardRef = useRef<View>(null);
@@ -149,6 +148,12 @@ export default function FeedbackScreen({ navigation, route }: Props) {
 
   const handleGetFeedback = async () => {
     if (submittingRef.current) return;
+
+    // Fast-path: skip the async gate if local state already shows 0
+    if (remaining === 0) {
+      (navigation as any).navigate('Paywall');
+      return;
+    }
 
     if (!input.trim()) {
       Alert.alert('Nothing to review', 'Please enter some text first.');
@@ -238,10 +243,12 @@ export default function FeedbackScreen({ navigation, route }: Props) {
   };
 
   const remainingLabel =
-    remaining === null
-      ? 'Unlimited checks'
+    remaining === undefined
+      ? ''
+      : remaining === null
+      ? 'Unlimited ✓'
       : remaining === 0
-      ? 'Daily limit reached'
+      ? 'Daily limit reached — resets at midnight'
       : `${remaining} check${remaining === 1 ? '' : 's'} left today`;
 
   return (
@@ -295,7 +302,9 @@ export default function FeedbackScreen({ navigation, route }: Props) {
                 <Text style={styles.buttonText}>  Thinking...</Text>
               </View>
             ) : (
-              <Text style={styles.buttonText}>Get Honest Feedback</Text>
+              <Text style={styles.buttonText}>
+                {remaining === 0 ? 'Upgrade for More Checks' : 'Get Honest Feedback'}
+              </Text>
             )}
           </TouchableOpacity>
 
@@ -329,6 +338,19 @@ export default function FeedbackScreen({ navigation, route }: Props) {
                   <Text style={styles.shareButtonText}>Share Reality Check</Text>
                 </TouchableOpacity>
               )}
+              <TouchableOpacity
+                style={styles.newCheckButton}
+                onPress={() => {
+                  setResult(null);
+                  setInput('');
+                  setError('');
+                  getRemainingChecks().then(setRemaining);
+                  setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 50);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.newCheckButtonText}>Check Something Else</Text>
+              </TouchableOpacity>
             </View>
           ) : null}
         </ScrollView>
@@ -447,5 +469,14 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  newCheckButton: {
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+  },
+  newCheckButtonText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
   },
 });

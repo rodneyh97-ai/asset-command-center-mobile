@@ -14,9 +14,9 @@ import { unlockPremium } from '../services/usage';
 
 const FEATURES = [
   'Unlimited checks every day across all 15 modes',
-  'Full access to every new mode added',
-  'Shareable result card goes further with priority',
-  'Complete history saved forever',
+  'Full access to every new mode added to the app',
+  'Instant shareable result card for every check',
+  'Full check history saved on your device',
 ];
 
 export default function PaywallScreen() {
