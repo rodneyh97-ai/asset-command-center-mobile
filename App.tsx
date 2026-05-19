@@ -1,6 +1,9 @@
 import 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import AppNavigator from './src/navigation/AppNavigator';
+import { initPurchases } from './src/services/purchases';
+
+initPurchases();
 
 export default function App() {
   return (

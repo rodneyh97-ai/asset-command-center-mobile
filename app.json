@@ -4,6 +4,9 @@
     "slug": "realitycheck-ai",
     "version": "1.0.0",
     "orientation": "portrait",
+    "plugins": [
+      "react-native-purchases"
+    ],
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,

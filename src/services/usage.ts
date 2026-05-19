@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FREE_DAILY_LIMIT } from '../constants/config';
+import { checkPremiumEntitlement } from './purchases';
 
 const USAGE_KEY = 'rc_usage_v1';
 const PREMIUM_KEY = 'rc_premium_v1';
@@ -62,12 +63,12 @@ export async function markRateLimited(): Promise<void> {
 }
 
 // ── Premium status ────────────────────────────────────────────────────────────
-// TODO: replace with RevenueCat:
-//   import Purchases from 'react-native-purchases';
-//   const info = await Purchases.getCustomerInfo();
-//   return info.entitlements.active['premium'] !== undefined;
+// RevenueCat is the authoritative source when initialized (production builds).
+// Falls back to an AsyncStorage flag for Expo Go and pre-RC testing.
 
 export async function isPremium(): Promise<boolean> {
+  const rcResult = await checkPremiumEntitlement();
+  if (rcResult !== null) return rcResult; // RC is running — trust it completely
   try {
     return (await AsyncStorage.getItem(PREMIUM_KEY)) === 'true';
   } catch {
@@ -75,8 +76,9 @@ export async function isPremium(): Promise<boolean> {
   }
 }
 
+// Called after a successful RC purchase to keep the local cache in sync.
+// Also used to manually unlock premium during development.
 export async function unlockPremium(): Promise<void> {
-  // TODO: only call this after RevenueCat purchase verification
   try {
     await AsyncStorage.setItem(PREMIUM_KEY, 'true');
   } catch {

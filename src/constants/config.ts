@@ -12,3 +12,12 @@ export const APP_SECRET = 'rc_7f3a9b2c4e8d11edb8780242ac120002';
 
 // ── Free tier ────────────────────────────────────────────────────────────────
 export const FREE_DAILY_LIMIT = 5;
+
+// ── RevenueCat ────────────────────────────────────────────────────────────────
+// Get these from app.revenuecat.com → Your Project → API Keys
+// iOS key starts with "appl_", Android key starts with "goog_"
+export const REVENUECAT_IOS_KEY = 'appl_REPLACE_ME';
+export const REVENUECAT_ANDROID_KEY = 'goog_REPLACE_ME';
+// Must match the entitlement identifier you create in the RevenueCat dashboard.
+// Attach both your monthly and annual products to this entitlement.
+export const RC_ENTITLEMENT = 'premium';

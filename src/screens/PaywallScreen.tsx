@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,17 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONT_SIZES, SPACING } from '../constants/theme';
+import {
+  getOfferings,
+  purchaseRCPackage,
+  restorePurchasesRC,
+  RCOfferings,
+} from '../services/purchases';
+import type { PurchasesPackage } from 'react-native-purchases';
 import { unlockPremium } from '../services/usage';
 
 const FEATURES = [
@@ -21,40 +29,73 @@ const FEATURES = [
 
 export default function PaywallScreen() {
   const navigation = useNavigation();
-  const [loading, setLoading] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
+  const [offerings, setOfferings] = useState<RCOfferings>({ monthly: null, annual: null });
+  const [loadingOfferings, setLoadingOfferings] = useState(true);
 
-  const handlePurchase = async (plan: 'monthly' | 'annual') => {
-    if (loading) return;
-    setLoading(true);
-    try {
-      // TODO: Replace with RevenueCat:
-      //   import Purchases from 'react-native-purchases';
-      //   const offerings = await Purchases.getOfferings();
-      //   const pkg = plan === 'annual'
-      //     ? offerings.current?.annual
-      //     : offerings.current?.monthly;
-      //   if (pkg) {
-      //     await Purchases.purchasePackage(pkg);
-      //     await unlockPremium(); // called after successful RevenueCat verification
-      //   }
-      //
-      // For now — show setup instructions:
+  useEffect(() => {
+    getOfferings().then((o) => {
+      setOfferings(o);
+      setLoadingOfferings(false);
+    });
+  }, []);
+
+  const handlePurchase = async (pkg: PurchasesPackage | null, plan: 'monthly' | 'annual') => {
+    if (purchasing) return;
+
+    if (!pkg) {
       Alert.alert(
-        'Almost Ready',
-        `RevenueCat in-app purchase setup needed.\n\n1. Create a RevenueCat account\n2. Add your App Store / Play Store app\n3. Set product IDs in purchases.ts\n\nPlan: ${plan}`,
-        [{ text: 'Got It' }],
+        'Store Not Ready',
+        `In-app purchases require a production build with RevenueCat configured.\n\n` +
+        `Steps:\n1. Create a RevenueCat project at app.revenuecat.com\n` +
+        `2. Add your ${plan} product in App Store Connect / Play Console\n` +
+        `3. Set REVENUECAT_IOS_KEY / REVENUECAT_ANDROID_KEY in src/constants/config.ts\n` +
+        `4. Build with EAS (eas build)`,
+        [{ text: 'OK' }],
       );
-    } catch {
-      Alert.alert('Purchase Failed', 'Please try again.');
-    } finally {
-      setLoading(false);
+      return;
     }
+
+    setPurchasing(true);
+    const result = await purchaseRCPackage(pkg);
+    setPurchasing(false);
+
+    if (result.ok) {
+      await unlockPremium();
+      Alert.alert(
+        "You're Unlimited! 🔥",
+        'Enjoy unlimited reality checks — no limits, no BS.',
+        [{ text: "Let's Go", onPress: () => navigation.goBack() }],
+      );
+    } else if (!result.cancelled) {
+      Alert.alert('Purchase Failed', result.error || 'Please try again.');
+    }
+    // user cancelled the OS payment sheet — no alert, just dismiss silently
   };
 
   const handleRestore = async () => {
-    // TODO: Purchases.restorePurchases()
-    Alert.alert('Restore Purchases', 'No previous purchases found.');
+    if (purchasing) return;
+    setPurchasing(true);
+    const restored = await restorePurchasesRC();
+    setPurchasing(false);
+
+    if (restored) {
+      await unlockPremium();
+      Alert.alert('Restored!', 'Your subscription is active again.', [
+        { text: 'Great', onPress: () => navigation.goBack() },
+      ]);
+    } else {
+      Alert.alert('Nothing to Restore', 'No active subscription found for this account.');
+    }
   };
+
+  const annualPkg = offerings.annual;
+  const monthlyPkg = offerings.monthly;
+  const annualPrice = annualPkg?.product.priceString ?? '$29.99';
+  const monthlyPrice = monthlyPkg?.product.priceString ?? '$4.99';
+  const annualMonthlyNote = annualPkg?.product.pricePerMonthString != null
+    ? `Just ${annualPkg.product.pricePerMonthString}/mo · cancel anytime`
+    : 'Just $2.50/month · cancel anytime';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -80,44 +121,59 @@ export default function PaywallScreen() {
           ))}
         </View>
 
-        {/* Annual — highlighted */}
-        <TouchableOpacity
-          style={[styles.plan, styles.planHighlighted]}
-          onPress={() => handlePurchase('annual')}
-          activeOpacity={0.85}
-          disabled={loading}
-        >
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>BEST VALUE</Text>
-          </View>
-          <Text style={styles.planTitle}>Annual</Text>
-          <Text style={styles.planPrice}>
-            $29.99<Text style={styles.planPer}> / year</Text>
-          </Text>
-          <Text style={styles.planNote}>Just $2.50/month · cancel anytime</Text>
-        </TouchableOpacity>
+        {loadingOfferings ? (
+          <ActivityIndicator color={COLORS.accent} size="large" style={styles.loader} />
+        ) : (
+          <>
+            {/* Annual — highlighted */}
+            <TouchableOpacity
+              style={[styles.plan, styles.planHighlighted]}
+              onPress={() => handlePurchase(annualPkg, 'annual')}
+              activeOpacity={0.85}
+              disabled={purchasing}
+            >
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>BEST VALUE</Text>
+              </View>
+              <Text style={styles.planTitle}>Annual</Text>
+              <Text style={styles.planPrice}>
+                {annualPrice}<Text style={styles.planPer}> / year</Text>
+              </Text>
+              <Text style={styles.planNote}>{annualMonthlyNote}</Text>
+            </TouchableOpacity>
 
-        {/* Monthly */}
-        <TouchableOpacity
-          style={styles.plan}
-          onPress={() => handlePurchase('monthly')}
-          activeOpacity={0.85}
-          disabled={loading}
-        >
-          <Text style={styles.planTitle}>Monthly</Text>
-          <Text style={styles.planPrice}>
-            $4.99<Text style={styles.planPer}> / month</Text>
-          </Text>
-          <Text style={styles.planNote}>Cancel anytime</Text>
-        </TouchableOpacity>
+            {/* Monthly */}
+            <TouchableOpacity
+              style={styles.plan}
+              onPress={() => handlePurchase(monthlyPkg, 'monthly')}
+              activeOpacity={0.85}
+              disabled={purchasing}
+            >
+              <Text style={styles.planTitle}>Monthly</Text>
+              <Text style={styles.planPrice}>
+                {monthlyPrice}<Text style={styles.planPer}> / month</Text>
+              </Text>
+              <Text style={styles.planNote}>Cancel anytime</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
-        <TouchableOpacity onPress={handleRestore} activeOpacity={0.7} style={styles.restore}>
+        {purchasing && (
+          <ActivityIndicator color={COLORS.accent} style={styles.purchasingIndicator} />
+        )}
+
+        <TouchableOpacity
+          onPress={handleRestore}
+          activeOpacity={0.7}
+          style={styles.restore}
+          disabled={purchasing}
+        >
           <Text style={styles.restoreText}>Restore Purchase</Text>
         </TouchableOpacity>
 
         <Text style={styles.legal}>
-          Payment charged to your App Store account. Subscription renews automatically unless
-          cancelled at least 24 hours before the end of the billing period.
+          Payment charged to your App Store or Google Play account. Subscription auto-renews
+          unless cancelled at least 24 hours before the end of the billing period.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -151,8 +207,15 @@ const styles = StyleSheet.create({
   },
   features: { width: '100%', marginBottom: SPACING.xl },
   featureRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: SPACING.sm },
-  check: { color: COLORS.accent, fontSize: FONT_SIZES.md, fontWeight: '800', marginRight: SPACING.sm, marginTop: 1 },
+  check: {
+    color: COLORS.accent,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '800',
+    marginRight: SPACING.sm,
+    marginTop: 1,
+  },
   featureText: { flex: 1, fontSize: FONT_SIZES.md, color: COLORS.text, lineHeight: FONT_SIZES.md * 1.5 },
+  loader: { marginVertical: SPACING.xxl },
   plan: {
     width: '100%',
     backgroundColor: COLORS.surface,
@@ -176,6 +239,7 @@ const styles = StyleSheet.create({
   planPrice: { fontSize: FONT_SIZES.xxl, fontWeight: '900', color: COLORS.text },
   planPer: { fontSize: FONT_SIZES.md, fontWeight: '400', color: COLORS.textSecondary },
   planNote: { fontSize: FONT_SIZES.xs, color: COLORS.textMuted, marginTop: SPACING.xs },
+  purchasingIndicator: { marginVertical: SPACING.md },
   restore: { marginTop: SPACING.md, padding: SPACING.sm },
   restoreText: { fontSize: FONT_SIZES.sm, color: COLORS.textSecondary },
   legal: {
