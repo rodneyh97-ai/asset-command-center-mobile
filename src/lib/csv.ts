@@ -34,20 +34,27 @@ export function exportPlayersToCSV(players: Player[]): string {
   return rows.join('\n');
 }
 
+const MAX_FIELD_LENGTH = 200;
+const MAX_ROWS = 100;
+
 export function importPlayersFromCSV(csv: string, teamId: string): Player[] {
+  if (csv.length > 500_000) throw new Error('CSV file too large (max 500KB)');
+
   const lines = csv.trim().split('\n');
   if (lines.length < 2) return [];
 
   const headers = lines[0].split(',').map((h) => h.trim());
   const players: Player[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
+  const rowLimit = Math.min(lines.length, MAX_ROWS + 1);
+  for (let i = 1; i < rowLimit; i++) {
     const values = parseCsvLine(lines[i]);
     if (values.length < 4) continue;
 
     const get = (field: string) => {
       const idx = headers.indexOf(field);
-      return idx >= 0 ? values[idx]?.trim() || '' : '';
+      const raw = idx >= 0 ? values[idx]?.trim() || '' : '';
+      return raw.slice(0, MAX_FIELD_LENGTH);
     };
 
     const now = new Date().toISOString();
@@ -91,7 +98,11 @@ export function downloadCSV(content: string, filename: string) {
 }
 
 function escapeCsvField(value: string | number): string {
-  const str = String(value);
+  let str = String(value);
+  // Prevent CSV formula injection: prefix dangerous first chars with a single quote
+  if (str.length > 0 && /^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
   if (str.includes(',') || str.includes('"') || str.includes('\n')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
