@@ -162,6 +162,19 @@ export interface MatchEvent {
   auditNote?: string;
 }
 
+export interface PlayerAvailabilityEntry {
+  playerId: string;
+  status: AvailabilityStatus;
+  reason?: string;
+}
+
+export interface SubstitutionRecord {
+  playerOutId: string;
+  playerInId: string;
+  position: number;
+  timestamp: string;
+}
+
 export interface SetState {
   setNumber: number;
   ourScore: number;
@@ -174,6 +187,9 @@ export interface SetState {
   liberoReplacedPlayerId?: string;
   substitutionCount: number;
   timeoutsUsed: { us: number; opponent: number };
+  playerAvailability: PlayerAvailabilityEntry[];
+  substitutionHistory: SubstitutionRecord[];
+  liberoMovementLog: { liberoId: string; replacedPlayerId: string; isEntering: boolean; timestamp: string }[];
 }
 
 export interface MatchState {

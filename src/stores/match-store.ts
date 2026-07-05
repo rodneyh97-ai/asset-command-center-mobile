@@ -35,6 +35,10 @@ interface MatchStore {
   confirmSubstitution(playerOutId: string, playerInId: string): void;
   liberoReplacement(liberoId: string, replacedPlayerId: string, isEntering: boolean): void;
   applyCorrection(corrections: Record<string, unknown>, auditNote: string): void;
+  changePlayerAvailability(playerId: string, status: string, reason?: string): void;
+  addNote(note: string): void;
+  endSet(): void;
+  endMatch(): void;
   undo(): void;
   redo(): void;
   canUndo(): boolean;
@@ -178,6 +182,58 @@ export const useMatchStore = create<MatchStore>((set, get) => ({
     if (!state) return;
 
     const event = createEvent(state.matchId, 'CorrectionApplied', corrections, true, auditNote);
+    const updatedLog = [...state.eventLog, event];
+    const newState = rebuildState(updatedLog);
+    if (newState) {
+      set({ state: { ...newState, eventLog: updatedLog } });
+      persistEvent(event);
+    }
+  },
+
+  changePlayerAvailability(playerId, status, reason) {
+    const { state } = get();
+    if (!state) return;
+
+    const event = createEvent(state.matchId, 'PlayerAvailabilityChanged', {
+      playerId,
+      status,
+      reason,
+    });
+    const updatedLog = [...state.eventLog, event];
+    const newState = rebuildState(updatedLog);
+    if (newState) {
+      set({ state: { ...newState, eventLog: updatedLog } });
+      persistEvent(event);
+    }
+  },
+
+  addNote(note) {
+    const { state } = get();
+    if (!state) return;
+
+    const event = createEvent(state.matchId, 'NoteAdded', { note }, true);
+    const updatedLog = [...state.eventLog, event];
+    set({ state: { ...state, eventLog: updatedLog } });
+    persistEvent(event);
+  },
+
+  endSet() {
+    const { state } = get();
+    if (!state) return;
+
+    const event = createEvent(state.matchId, 'SetEnded', {
+      setNumber: state.sets[state.currentSetIndex]?.setNumber,
+    }, false);
+    const updatedLog = [...state.eventLog, event];
+    set({ state: { ...state, eventLog: updatedLog } });
+    persistEvent(event);
+  },
+
+  endMatch() {
+    const { state } = get();
+    if (!state) return;
+
+    const event = createEvent(state.matchId, 'MatchEnded', {}, false);
     const updatedLog = [...state.eventLog, event];
     const newState = rebuildState(updatedLog);
     if (newState) {

@@ -1,10 +1,12 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAppStore } from '@/stores/app-store';
 import { Player, PlayerRole, AvailabilityStatus } from '@/domain/types';
+import { exportPlayersToCSV, importPlayersFromCSV, downloadCSV } from '@/lib/csv';
+import { playerRepo } from '@/db/database';
 
 const ROLES: PlayerRole[] = [
   'Setter',
@@ -142,12 +144,42 @@ function RosterContent() {
 
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Roster</h1>
-        <button
-          onClick={() => { resetForm(); setShowAddPlayer(true); }}
-          className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-medium"
-        >
-          + Add Player
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              const csv = exportPlayersToCSV(players);
+              downloadCSV(csv, `roster-${new Date().toISOString().slice(0, 10)}.csv`);
+            }}
+            className="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-lg text-sm font-medium"
+          >
+            CSV Export
+          </button>
+          <label className="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-lg text-sm font-medium cursor-pointer">
+            CSV Import
+            <input
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file || !teamId) return;
+                const text = await file.text();
+                const imported = importPlayersFromCSV(text, teamId);
+                for (const p of imported) {
+                  await playerRepo.put(p);
+                }
+                loadPlayersForTeam(teamId);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          <button
+            onClick={() => { resetForm(); setShowAddPlayer(true); }}
+            className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-medium"
+          >
+            + Add Player
+          </button>
+        </div>
       </div>
 
       {/* Player List */}

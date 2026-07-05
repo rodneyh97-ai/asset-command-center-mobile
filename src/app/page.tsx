@@ -71,6 +71,22 @@ export default function Home() {
           <div className="font-medium">Live Match</div>
           <div className="text-sm text-slate-400">Start or resume</div>
         </Link>
+        <Link
+          href="/player-mode"
+          className="bg-slate-800 hover:bg-slate-700 rounded-xl p-4 text-left transition-colors touch-manipulation"
+        >
+          <div className="text-2xl mb-2">📱</div>
+          <div className="font-medium">Player Mode</div>
+          <div className="text-sm text-slate-400">Read-only cards</div>
+        </Link>
+        <Link
+          href="/settings"
+          className="bg-slate-800 hover:bg-slate-700 rounded-xl p-4 text-left transition-colors touch-manipulation"
+        >
+          <div className="text-2xl mb-2">⚙️</div>
+          <div className="font-medium">Settings</div>
+          <div className="text-sm text-slate-400">Backup & restore</div>
+        </Link>
       </div>
 
       {/* Create Club Modal */}

@@ -34,6 +34,7 @@ function MatchContent() {
   const [selectedRulesetId, setSelectedRulesetId] = useState('');
   const [opponentName, setOpponentName] = useState('');
   const [servingFirst, setServingFirst] = useState<ServingTeam>('us');
+  const [activeLiberoIds, setActiveLiberoIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (teamId) {
@@ -87,6 +88,7 @@ function MatchContent() {
       .map((p) => p.id);
 
     startSet(1, lineup.officialRotationOrder, benchPlayerIds, servingFirst, lineup.selectedLiberoIds);
+    setActiveLiberoIds(lineup.selectedLiberoIds);
     setSetupMode(false);
   };
 
@@ -115,7 +117,7 @@ function MatchContent() {
           </span>
         </div>
         <div className="flex-1 overflow-auto">
-          <LiveMatchDashboard players={players} opponentName={opponentName} />
+          <LiveMatchDashboard players={players} opponentName={opponentName} liberoIds={activeLiberoIds} />
         </div>
       </div>
     );

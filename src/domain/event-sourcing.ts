@@ -47,6 +47,9 @@ function createInitialSetState(
     liberoReplacedPlayerId: undefined,
     substitutionCount: 0,
     timeoutsUsed: { us: 0, opponent: 0 },
+    playerAvailability: [],
+    substitutionHistory: [],
+    liberoMovementLog: [],
   };
 }
 
@@ -141,6 +144,7 @@ function applyEvent(state: MatchState, event: MatchEvent): MatchState {
         playerOutId: string;
         playerInId: string;
       };
+      const position = currentSet.courtPlayers.find((p) => p.playerId === playerOutId)?.position || 0;
       const updatedCourt = currentSet.courtPlayers.map((p) =>
         p.playerId === playerOutId ? { ...p, playerId: playerInId } : p
       );
@@ -153,6 +157,10 @@ function applyEvent(state: MatchState, event: MatchEvent): MatchState {
         courtPlayers: updatedCourt,
         benchPlayerIds: updatedBench,
         substitutionCount: currentSet.substitutionCount + 1,
+        substitutionHistory: [
+          ...currentSet.substitutionHistory,
+          { playerOutId, playerInId, position, timestamp: event.timestamp },
+        ],
       };
       return { ...state, sets: updatedSets };
     }
@@ -166,6 +174,7 @@ function applyEvent(state: MatchState, event: MatchEvent): MatchState {
         isEntering: boolean;
       };
       const updatedSets = [...state.sets];
+      const logEntry = { liberoId, replacedPlayerId, isEntering, timestamp: event.timestamp };
       if (isEntering) {
         const updatedCourt = currentSet.courtPlayers.map((p) =>
           p.playerId === replacedPlayerId ? { ...p, playerId: liberoId } : p
@@ -175,6 +184,7 @@ function applyEvent(state: MatchState, event: MatchEvent): MatchState {
           courtPlayers: updatedCourt,
           activeLiberoId: liberoId,
           liberoReplacedPlayerId: replacedPlayerId,
+          liberoMovementLog: [...currentSet.liberoMovementLog, logEntry],
         };
       } else {
         const updatedCourt = currentSet.courtPlayers.map((p) =>
@@ -185,8 +195,29 @@ function applyEvent(state: MatchState, event: MatchEvent): MatchState {
           courtPlayers: updatedCourt,
           activeLiberoId: undefined,
           liberoReplacedPlayerId: undefined,
+          liberoMovementLog: [...currentSet.liberoMovementLog, logEntry],
         };
       }
+      return { ...state, sets: updatedSets };
+    }
+
+    case 'PlayerAvailabilityChanged': {
+      const currentSet = state.sets[state.currentSetIndex];
+      if (!currentSet) return state;
+      const { playerId, status, reason } = event.payload as {
+        playerId: string;
+        status: string;
+        reason?: string;
+      };
+      const existing = currentSet.playerAvailability.filter((p) => p.playerId !== playerId);
+      const updatedSets = [...state.sets];
+      updatedSets[state.currentSetIndex] = {
+        ...currentSet,
+        playerAvailability: [
+          ...existing,
+          { playerId, status: status as any, reason },
+        ],
+      };
       return { ...state, sets: updatedSets };
     }
 
