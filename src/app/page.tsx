@@ -80,6 +80,14 @@ export default function Home() {
           <div className="text-sm text-slate-400">Read-only cards</div>
         </Link>
         <Link
+          href="/practice"
+          className="bg-slate-800 hover:bg-slate-700 rounded-xl p-4 text-left transition-colors touch-manipulation"
+        >
+          <div className="text-2xl mb-2">📝</div>
+          <div className="font-medium">Practice</div>
+          <div className="text-sm text-slate-400">Plans & drills</div>
+        </Link>
+        <Link
           href="/settings"
           className="bg-slate-800 hover:bg-slate-700 rounded-xl p-4 text-left transition-colors touch-manipulation"
         >

@@ -8,10 +8,16 @@ import {
   Lineup,
   Match,
   MatchEvent,
+  PlayerDevelopmentPlan,
+  PracticePlan,
+  PracticeResult,
+  CoachObservation,
+  Drill,
+  ImprovementSnapshot,
 } from '@/domain/types';
 
 export interface BackupData {
-  version: 1;
+  version: 1 | 2;
   exportedAt: string;
   clubs: Club[];
   seasons: Season[];
@@ -21,11 +27,18 @@ export interface BackupData {
   lineups: Lineup[];
   matches: Match[];
   matchEvents: MatchEvent[];
+  devPlans?: PlayerDevelopmentPlan[];
+  practicePlans?: PracticePlan[];
+  practiceResults?: PracticeResult[];
+  coachObservations?: CoachObservation[];
+  customDrills?: Drill[];
+  improvementSnapshots?: (ImprovementSnapshot & { id: string; teamId: string })[];
 }
 
 export async function exportBackup(): Promise<BackupData> {
   const db = await getDB();
-  const [clubs, seasons, teams, players, rulesets, lineups, matches, matchEvents] =
+  const [clubs, seasons, teams, players, rulesets, lineups, matches, matchEvents,
+    devPlans, practicePlans, practiceResults, coachObservations, customDrills, improvementSnapshots] =
     await Promise.all([
       db.getAll('clubs'),
       db.getAll('seasons'),
@@ -35,10 +48,16 @@ export async function exportBackup(): Promise<BackupData> {
       db.getAll('lineups'),
       db.getAll('matches'),
       db.getAll('matchEvents'),
+      db.getAll('devPlans'),
+      db.getAll('practicePlans'),
+      db.getAll('practiceResults'),
+      db.getAll('coachObservations'),
+      db.getAll('customDrills'),
+      db.getAll('improvementSnapshots'),
     ]);
 
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     clubs,
     seasons,
@@ -48,6 +67,12 @@ export async function exportBackup(): Promise<BackupData> {
     lineups,
     matches,
     matchEvents,
+    devPlans,
+    practicePlans,
+    practiceResults,
+    coachObservations,
+    customDrills,
+    improvementSnapshots,
   };
 }
 
@@ -69,7 +94,7 @@ function truncateStrings(obj: Record<string, unknown>, maxLen = 1000): Record<st
 }
 
 export async function importBackup(data: BackupData): Promise<{ imported: number }> {
-  if (data.version !== 1) throw new Error('Unsupported backup version');
+  if (data.version !== 1 && data.version !== 2) throw new Error('Unsupported backup version');
 
   const db = await getDB();
   let count = 0;
@@ -83,6 +108,12 @@ export async function importBackup(data: BackupData): Promise<{ imported: number
     { name: 'lineups' as const, items: data.lineups },
     { name: 'matches' as const, items: data.matches },
     { name: 'matchEvents' as const, items: data.matchEvents },
+    { name: 'devPlans' as const, items: data.devPlans || [] },
+    { name: 'practicePlans' as const, items: data.practicePlans || [] },
+    { name: 'practiceResults' as const, items: data.practiceResults || [] },
+    { name: 'coachObservations' as const, items: data.coachObservations || [] },
+    { name: 'customDrills' as const, items: data.customDrills || [] },
+    { name: 'improvementSnapshots' as const, items: data.improvementSnapshots || [] },
   ] as const;
 
   for (const { name, items } of stores) {
@@ -134,11 +165,13 @@ function sanitizeArray(arr: unknown): unknown[] {
 
 function validateBackupStructure(data: unknown): BackupData {
   if (!isPlainObject(data)) throw new Error('Invalid backup: not an object');
-  if (data.version !== 1) throw new Error('Unsupported backup version');
+  if (data.version !== 1 && data.version !== 2) throw new Error('Unsupported backup version');
   if ('__proto__' in data) throw new Error('Invalid backup: forbidden key');
 
+  const version = data.version as 1 | 2;
+
   return {
-    version: 1,
+    version,
     exportedAt: typeof data.exportedAt === 'string' ? data.exportedAt : '',
     clubs: sanitizeArray(data.clubs) as Club[],
     seasons: sanitizeArray(data.seasons) as Season[],
@@ -148,6 +181,12 @@ function validateBackupStructure(data: unknown): BackupData {
     lineups: sanitizeArray(data.lineups) as Lineup[],
     matches: sanitizeArray(data.matches) as Match[],
     matchEvents: sanitizeArray(data.matchEvents) as MatchEvent[],
+    devPlans: sanitizeArray(data.devPlans) as PlayerDevelopmentPlan[],
+    practicePlans: sanitizeArray(data.practicePlans) as PracticePlan[],
+    practiceResults: sanitizeArray(data.practiceResults) as PracticeResult[],
+    coachObservations: sanitizeArray(data.coachObservations) as CoachObservation[],
+    customDrills: sanitizeArray(data.customDrills) as Drill[],
+    improvementSnapshots: sanitizeArray(data.improvementSnapshots) as (ImprovementSnapshot & { id: string; teamId: string })[],
   };
 }
 

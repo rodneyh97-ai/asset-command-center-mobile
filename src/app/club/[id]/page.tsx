@@ -162,6 +162,13 @@ export default function ClubPage() {
                   >
                     Match
                   </Link>
+                  <Link
+                    href={`/practice?teamId=${team.id}`}
+                    onClick={() => setActiveTeam(team.id)}
+                    className="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-lg text-sm"
+                  >
+                    Practice
+                  </Link>
                 </div>
               </div>
             ))}

@@ -225,3 +225,153 @@ export interface MatchState {
   eventLog: MatchEvent[];
   undoPointer: number;
 }
+
+// ── Practice Intelligence Module ──
+
+export type SkillArea =
+  | 'serving'
+  | 'serve-receive'
+  | 'attacking'
+  | 'blocking'
+  | 'setting'
+  | 'defense'
+  | 'transition'
+  | 'rotation';
+
+export type EvidenceSource = 'match-stats' | 'hudl-import' | 'coach-observation';
+
+export type DrillIntensity = 'low' | 'medium' | 'high';
+
+export type PracticeDuration = 60 | 90 | 120;
+
+export type PracticePlanStatus = 'draft' | 'active' | 'completed';
+
+export type DrillStatus = 'pending' | 'completed' | 'skipped';
+
+export interface EvidenceRecord {
+  source: EvidenceSource;
+  matchId?: string;
+  matchDate?: string;
+  opponentName?: string;
+  value: number;
+  sampleSize: number;
+  timestamp: string;
+}
+
+export interface PlayerWeakness {
+  playerId: string;
+  skillArea: SkillArea;
+  metric: string;
+  currentValue: number;
+  benchmarkValue: number;
+  evidence: EvidenceRecord[];
+  confidence: number;
+  description: string;
+}
+
+export interface PlayerDevelopmentPlan {
+  id: string;
+  teamId: string;
+  playerId: string;
+  generatedAt: string;
+  strengths: { skillArea: SkillArea; metric: string; value: number; evidence: EvidenceRecord[] }[];
+  weaknesses: PlayerWeakness[];
+  recommendations: string[];
+  coachNotes: string;
+  updatedAt: string;
+}
+
+export interface TeamPracticePriority {
+  skillArea: SkillArea;
+  reason: string;
+  impactScore: number;
+  confidenceScore: number;
+  urgencyScore: number;
+  compositeScore: number;
+  affectedPlayerIds: string[];
+  evidence: EvidenceRecord[];
+}
+
+export interface Drill {
+  id: string;
+  name: string;
+  skillArea: SkillArea;
+  targetRoles: PlayerRole[];
+  purpose: string;
+  setup: string;
+  execution: string;
+  progressions: string[];
+  successMeasurement: string;
+  defaultDurationMinutes: number;
+  defaultReps?: number;
+  intensity: DrillIntensity;
+  minPlayers: number;
+  maxPlayers: number;
+  isCustom: boolean;
+}
+
+export interface PracticeDrillAssignment {
+  drillId: string;
+  orderIndex: number;
+  durationMinutes: number;
+  reps?: number;
+  assignedPlayerIds: string[];
+  targetMetric?: string;
+  targetValue?: number;
+  status: DrillStatus;
+  coachFeedback?: string;
+  actualReps?: number;
+}
+
+export interface PracticePlan {
+  id: string;
+  teamId: string;
+  name: string;
+  date: string;
+  durationMinutes: PracticeDuration;
+  status: PracticePlanStatus;
+  priorities: TeamPracticePriority[];
+  warmup: PracticeDrillAssignment[];
+  mainBlock: PracticeDrillAssignment[];
+  cooldown: PracticeDrillAssignment[];
+  coachOverrides: string;
+  generatedAt: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PracticeResult {
+  id: string;
+  practicePlanId: string;
+  teamId: string;
+  date: string;
+  drillResults: {
+    drillId: string;
+    status: DrillStatus;
+    coachFeedback?: string;
+    actualReps?: number;
+  }[];
+  overallNotes: string;
+  completedAt: string;
+}
+
+export interface CoachObservation {
+  id: string;
+  teamId: string;
+  playerId: string;
+  skillArea: SkillArea;
+  observation: string;
+  rating?: number;
+  createdAt: string;
+}
+
+export interface ImprovementSnapshot {
+  playerId: string;
+  skillArea: SkillArea;
+  metric: string;
+  value: number;
+  sampleSize: number;
+  date: string;
+  source: EvidenceSource;
+}
