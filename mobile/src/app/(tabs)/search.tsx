@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 
 import { CATALOG, safetyCheck, type MealIdea, type Setting } from '../../engine';
+import { useActiveProfile } from '../../store/useActiveProfile';
 import { useStore } from '../../store/AppProvider';
 
 import { Body, Caution, ChipGroup, Icon, IconTile, MealArt, Row, Screen, Small, Tags, Title } from '../../ui/components';
@@ -24,7 +25,7 @@ const MAX_QUERY = 60;
 export default function Search() {
   const { state, ready, track } = useStore();
   const c = useColors();
-  const p = state.profile;
+  const p = useActiveProfile(state);
   const [setting, setSetting] = useState<Setting>(() => (state.lastContext?.setting === 'home' ? 'restaurant' : (state.lastContext?.setting ?? 'restaurant')));
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');

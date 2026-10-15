@@ -443,3 +443,55 @@ describe('new screens', () => {
     expect(screen.queryByText('EatOS is locked')).toBeNull(); // turning it on doesn't lock you out mid-session
   });
 });
+
+describe('couples', () => {
+  it('add a partner, eat together safely, and decide together', async () => {
+    await onboard();
+    openProfile();
+    fireEvent.press(await screen.findByLabelText('Add someone you eat with'));
+    fireEvent.changeText(screen.getByLabelText('Their name or nickname'), 'Sam');
+    fireEvent.press(screen.getAllByLabelText('Peanut allergy').at(-1)!);
+    fireEvent.press(screen.getByLabelText('Save person'));
+    await screen.findByLabelText('Edit Sam');
+
+    fireEvent.press(screen.getAllByLabelText('Home')[0]);
+    fireEvent.press(await screen.findByLabelText('+ Sam'));
+    fireEvent.press(screen.getByLabelText('Get my recommendation'));
+    await screen.findByText(/For you and Sam/);
+    for (const m of CATALOG.filter((x) => x.contains.includes('peanut'))) expect(screen.queryByText(m.name)).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Decide together'));
+    await screen.findByText('Decide together');
+    const first = screen.getAllByLabelText(/^You would eat /)[0];
+    const meal = (first.props.accessibilityLabel as string).replace('You would eat ', '');
+    fireEvent.press(first);
+    fireEvent.press(screen.getByLabelText('Done — pass to Sam'));
+    fireEvent.press(screen.getByLabelText(`Sam would eat ${meal}`));
+    fireEvent.press(screen.getByLabelText('See the result'));
+    await screen.findByText(/It’s a match/);
+    fireEvent.press(screen.getByLabelText(`Let’s have ${meal.toLowerCase()}`));
+    await screen.findByText(/^Enjoy your/);
+  });
+
+  it('no shared pick → offers new options or lets EatOS choose', async () => {
+    await AsyncStorage.setItem(
+      'eatos.state.v1',
+      JSON.stringify({
+        version: 1,
+        profile: { goal: 'eat_better', struggles: [], cuisines: [], allergens: [], diets: [], budget: 2, considerations: [], createdAt: new Date().toISOString() },
+        history: [],
+        lastContext: { setting: 'takeout', hunger: 'normal', time: 20, budget: 2, feeling: 'fine' },
+        analytics: [],
+        members: [{ id: 'm-sam', name: 'Sam', allergens: [], diets: [], cuisines: [] }],
+        eatingWith: ['m-sam'],
+      }),
+    );
+    renderRouter(routes, { initialUrl: '/decide' });
+    fireEvent.press(await screen.findByLabelText('Decide together'));
+    fireEvent.press(screen.getByLabelText('Done — pass to Sam'));
+    fireEvent.press(screen.getByLabelText('See the result'));
+    await screen.findByText(/No match this round/);
+    fireEvent.press(screen.getByLabelText('Just pick for us'));
+    await screen.findByText(/^Enjoy your/);
+  });
+});

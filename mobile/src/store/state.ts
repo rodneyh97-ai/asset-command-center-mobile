@@ -1,5 +1,6 @@
 // Pure app-state logic (no React, no storage) so it can be unit-tested.
 import { CATALOG, safetyCheck, type Context, type FeedbackEvent, type FeedbackKind, type Feeling, type MealIdea, type MealTime, type Profile, type Setting } from '../engine';
+import { combineProfiles, sanitizeMembers, type Member } from '../engine/household';
 import { isSaved } from '../engine/recommend';
 import { sanitizeContext, sanitizeFeedback, sanitizeProfile, VALID } from '../engine/validate';
 import type { AnalyticsEvent } from '../analytics/events';
@@ -29,6 +30,10 @@ export interface AppState {
   premiumInterest: boolean;
   /** User consent for sending anonymous crash reports (only matters when a crash server is configured). */
   crashReports: boolean;
+  /** People the user sometimes eats with (nicknames + food needs only). */
+  members: Member[];
+  /** Who's eating right now (member ids); empty = just me. */
+  eatingWith: string[];
   /** Weekly reflection: when it last happened / was snoozed until. */
   checkin: { lastAt: string | null; snoozeUntil: string | null };
   /**
@@ -55,6 +60,8 @@ export const initialState: AppState = {
   plan: null,
   reminders: [],
   crashReports: true,
+  members: [],
+  eatingWith: [],
   appLock: false,
   sessionUnlockedAt: null,
   premiumInterest: false,
@@ -75,6 +82,9 @@ export type Action =
   | { type: 'clearPlan' }
   | { type: 'setReminders'; meals: AppState['reminders'] }
   | { type: 'setCrashReports'; on: boolean }
+  | { type: 'saveMember'; member: Member }
+  | { type: 'removeMember'; id: string }
+  | { type: 'setEatingWith'; ids: string[] }
   | { type: 'setAppLock'; on: boolean; at: number }
   | { type: 'unlocked'; at: number }
   | { type: 'setPremiumInterest'; on: boolean }
@@ -129,6 +139,21 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, sessionUnlockedAt: action.at };
     case 'setPremiumInterest':
       return { ...state, premiumInterest: action.on };
+    case 'saveMember': {
+      const exists = state.members.some((m) => m.id === action.member.id);
+      return {
+        ...state,
+        members: exists ? state.members.map((m) => (m.id === action.member.id ? action.member : m)) : [...state.members, action.member],
+      };
+    }
+    case 'removeMember':
+      return {
+        ...state,
+        members: state.members.filter((m) => m.id !== action.id),
+        eatingWith: state.eatingWith.filter((x) => x !== action.id),
+      };
+    case 'setEatingWith':
+      return { ...state, eatingWith: action.ids.filter((id) => state.members.some((m) => m.id === id)) };
     case 'setCrashReports':
       return { ...state, crashReports: action.on };
     case 'checkinDone':
@@ -179,6 +204,10 @@ export function parseStored(raw: string | null): AppState {
       ? [...new Set(d.reminders.filter((m): m is AppState['reminders'][number] => ['breakfast', 'lunch', 'dinner'].includes(m as string)))]
       : [],
     crashReports: d.crashReports !== false,
+    members: sanitizeMembers(d.members),
+    eatingWith: Array.isArray(d.eatingWith)
+      ? d.eatingWith.filter((id): id is string => typeof id === 'string' && sanitizeMembers(d.members).some((m) => m.id === id))
+      : [],
     appLock: d.appLock === true,
     sessionUnlockedAt: null,
     premiumInterest: d.premiumInterest === true,
@@ -304,4 +333,15 @@ export function weeklyReflection(history: FeedbackEvent[], now: Date) {
   const accepted = history.filter((e) => e.kind === 'accepted' && Date.parse(e.at) >= since);
   const days = new Set(accepted.map((e) => e.at.slice(0, 10)));
   return { decisions: accepted.length, activeDays: days.size };
+}
+
+/** The profile recommendations should use right now: me, plus whoever I'm eating with. */
+export function activeProfile(state: AppState): Profile | null {
+  if (!state.profile) return null;
+  const others = state.members.filter((m) => state.eatingWith.includes(m.id));
+  return combineProfiles(state.profile, others);
+}
+
+export function eatingWithNames(state: AppState): string[] {
+  return state.members.filter((m) => state.eatingWith.includes(m.id)).map((m) => m.name);
 }

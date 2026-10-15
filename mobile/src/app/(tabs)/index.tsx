@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 
 import { clock } from '../../clock';
 import { CATALOG, mealTimeFor, safetyCheck, type MealIdea } from '../../engine';
+import { useActiveProfile } from '../../store/useActiveProfile';
 import { useStore } from '../../store/AppProvider';
 import {
   checkinDue,
@@ -28,6 +29,7 @@ import {
   IconTile,
   Logo,
   MealArt,
+  MultiChipGroup,
   Row,
   Screen,
   SectionLabel,
@@ -48,7 +50,7 @@ export default function Home() {
   const [confirmation, setConfirmation] = useState<{ text: string; mealId: string } | null>(null);
   const now = clock.now();
 
-  const profile = state.profile;
+  const profile = useActiveProfile(state);
   const setting = state.lastContext?.setting ?? 'home';
   // Re-checked against today's allergies, diet, and where the user is eating.
   const quickPicks = useMemo(
@@ -219,6 +221,18 @@ export default function Home() {
           ))}
         </Row>
       </View>
+
+      {state.members.length > 0 ? (
+        <View style={{ gap: space.sm }}>
+          <SectionLabel>Who’s eating?</SectionLabel>
+          <MultiChipGroup
+            options={[{ value: 'me', label: 'Just me' }, ...state.members.map((m) => ({ value: m.id, label: `+ ${m.name}` }))]}
+            value={state.eatingWith.length ? state.eatingWith : ['me']}
+            exclusive="me"
+            onChange={(ids) => dispatch({ type: 'setEatingWith', ids: ids.filter((x) => x !== 'me') })}
+          />
+        </View>
+      ) : null}
 
       <ChipGroup stretch label="How hungry are you?" options={HUNGER} value={ctx.hunger} onChange={(v) => setCtx({ hunger: v })} />
       <ChipGroup stretch label="How much time do you have?" options={TIMES} value={ctx.time} onChange={(v) => setCtx({ time: v })} />

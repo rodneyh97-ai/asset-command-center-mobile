@@ -55,3 +55,5 @@ Risk: someone with a severe allergy may still choose a cross-contact meal. Every
 
 **D16 — Optional App Lock (Face ID / fingerprint / passcode).** Off by default; must authenticate to enable; cold start locked; relocks after 5 min away; uses the OS check only (no biometric data reaches EatOS). Not available on web. 2026-10-15.
 
+**D17 — Couples mode on one phone.** 2026-10-15. Add people you eat with (nickname + allergies, diet, tastes only). "Who's eating?" on Home combines profiles: allergies/diets are a union (safe for everyone), tastes favor overlap. "Decide together": each person marks the 3 options they'd eat (pass the phone); first shared pick wins, else new options or "just pick for us". Cross-phone sync and remote voting need the server (pending approval).
+

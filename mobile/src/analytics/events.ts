@@ -32,6 +32,7 @@ export type AnalyticsName =
   | 'premium_interest'
   | 'search_used'
   | 'app_lock_changed'
+  | 'member_saved'
   | 'goal_changed';
 
 export interface AnalyticsEvent {

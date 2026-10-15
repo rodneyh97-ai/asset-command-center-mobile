@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { clock } from '../../clock';
 import { CATALOG, isSaved, mealTimeFor, recommend, safetyCheck, standingCautions, swapsFor, type Setting } from '../../engine';
 import { VALID } from '../../engine/validate';
+import { useActiveProfile } from '../../store/useActiveProfile';
 import { useStore } from '../../store/AppProvider';
 import { defaultContext } from '../../store/state';
 import { Body, Button, Row, Screen, TextAction, Title } from '../../ui/components';
@@ -14,7 +15,7 @@ export default function MealScreen() {
   const params = useLocalSearchParams<{ id?: string; setting?: string }>();
   const { state, ready, feedback, track } = useStore();
   const [done, setDone] = useState(false);
-  const p = state.profile;
+  const p = useActiveProfile(state);
   // Route params are untrusted: only known meal ids and settings are accepted.
   const meal = CATALOG.find((m) => m.id === params.id);
   const setting: Setting = VALID.setting.includes(params.setting as Setting) ? (params.setting as Setting) : 'home';

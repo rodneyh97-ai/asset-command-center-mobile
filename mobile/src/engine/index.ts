@@ -12,3 +12,4 @@ export {
   ALLERGEN_LABEL,
 } from './recommend';
 export { learnTaste, tasteScore, habitBonus, mealFeatures } from './learn';
+export { combineProfiles, sanitizeMembers, type Member } from './household';

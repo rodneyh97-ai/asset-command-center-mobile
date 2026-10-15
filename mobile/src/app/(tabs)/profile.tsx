@@ -1,13 +1,13 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Platform, Pressable, Share, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, Share, Text, TextInput, View } from 'react-native';
 
 import { crashSummaryLines, readCrashes } from '../../analytics/crash';
 import { summaryText } from '../../analytics/events';
 import { sentryConfigured } from '../../analytics/sentry';
 import { clock } from '../../clock';
-import type { Goal, Profile } from '../../engine';
+import type { Goal, Member, Profile } from '../../engine';
 import { ensurePermission, REMINDER_TIMES, remindersSupported, syncReminders, type ReminderMeal } from '../../notifications/reminders';
 import { authenticate, canLock, lockSupported } from '../../security/appLock';
 import { useStore } from '../../store/AppProvider';
@@ -24,6 +24,7 @@ import {
   Row,
   Screen,
   Small,
+  TextAction,
   Title,
   ToggleRow,
   toggleIn,
@@ -47,6 +48,7 @@ export default function ProfileScreen() {
   const c = useColors();
   const [changingGoal, setChangingGoal] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Member | null>(null);
   const p = state.profile;
   if (!ready) return null; // wait for saved data before deciding where to go
   if (!p) return <Redirect href="/onboarding" />;
@@ -112,6 +114,61 @@ export default function ProfileScreen() {
           <Button label="Change goal" variant="secondary" onPress={() => setChangingGoal(true)} />
         </Row>
       )}
+
+      <Heading>People you eat with</Heading>
+      <Small>Add a partner or family member. When they’re eating too, EatOS only suggests meals that are safe for both of you.</Small>
+      {state.members.map((m) => (
+        <Row key={m.id} style={{ justifyContent: 'space-between' }}>
+          <Body style={{ flex: 1 }}>
+            {m.name}
+            {m.allergens.length + m.diets.length ? ` · ${m.allergens.length + m.diets.length} restriction${m.allergens.length + m.diets.length === 1 ? '' : 's'}` : ''}
+          </Body>
+          <TextAction label="Edit" a11yLabel={`Edit ${m.name}`} onPress={() => setEditing(m)} />
+          <TextAction label="Remove" a11yLabel={`Remove ${m.name}`} onPress={() => dispatch({ type: 'removeMember', id: m.id })} />
+        </Row>
+      ))}
+      {editing ? (
+        <Card>
+          <TextInput
+            value={editing.name}
+            onChangeText={(name) => setEditing({ ...editing, name: name.slice(0, 30) })}
+            placeholder="Their name or nickname"
+            placeholderTextColor={c.inkMuted}
+            accessibilityLabel="Their name or nickname"
+            maxLength={30}
+            style={[type.body, { color: c.ink, borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: space.md }]}
+          />
+          <Small muted={false}>Their allergies</Small>
+          <MultiChipGroup options={ALLERGENS} value={editing.allergens} onChange={(allergens) => setEditing({ ...editing, allergens })} />
+          <Small muted={false}>Their diet</Small>
+          <MultiChipGroup options={DIETS} value={editing.diets} onChange={(diets) => setEditing({ ...editing, diets })} />
+          <Small muted={false}>Foods they enjoy</Small>
+          <MultiChipGroup options={CUISINES} value={editing.cuisines} onChange={(cuisines) => setEditing({ ...editing, cuisines })} />
+          <Row>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Save person"
+                disabled={!editing.name.trim()}
+                onPress={() => {
+                  dispatch({ type: 'saveMember', member: { ...editing, name: editing.name.trim() } });
+                  track('member_saved');
+                  setEditing(null);
+                }}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button label="Cancel" variant="secondary" onPress={() => setEditing(null)} />
+            </View>
+          </Row>
+        </Card>
+      ) : state.members.length < 8 ? (
+        <Button
+          label="Add someone you eat with"
+          variant="secondary"
+          icon="person-add-outline"
+          onPress={() => setEditing({ id: `m-${Date.now().toString(36)}`, name: '', allergens: [], diets: [], cuisines: [] })}
+        />
+      ) : null}
 
       <Heading>Dietary restrictions</Heading>
       <Small>Allergies are strict rules. EatOS never suggests a meal that normally contains them.</Small>

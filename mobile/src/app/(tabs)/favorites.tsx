@@ -2,6 +2,7 @@ import { Redirect, router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { CATALOG, isSaved, safetyCheck } from '../../engine';
+import { useActiveProfile } from '../../store/useActiveProfile';
 import { useStore } from '../../store/AppProvider';
 import { defaultContext, recentMealIds } from '../../store/state';
 import { Body, Button, Heading, Icon, MealArt, Row, Screen, Small, Tags, Title } from '../../ui/components';
@@ -11,7 +12,7 @@ import { space, useColors } from '../../ui/theme';
 export default function Favorites() {
   const { state, ready } = useStore();
   const c = useColors();
-  const p = state.profile;
+  const p = useActiveProfile(state);
   if (!ready) return null; // wait for saved data before deciding where to go
   if (!p) return <Redirect href="/onboarding" />;
   const setting = (state.lastContext ?? defaultContext(p)).setting;

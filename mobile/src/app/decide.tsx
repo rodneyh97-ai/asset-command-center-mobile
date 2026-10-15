@@ -4,8 +4,9 @@ import { View } from 'react-native';
 
 import { clock } from '../clock';
 import { isSaved, mealTimeFor, recommend, swapsFor, type BudgetTier, type MealIdea, type Recommendation } from '../engine';
+import { useActiveProfile } from '../store/useActiveProfile';
 import { useStore } from '../store/AppProvider';
-import { defaultContext, nextMealSlot } from '../store/state';
+import { defaultContext, eatingWithNames, nextMealSlot } from '../store/state';
 import {
   Body,
   Button,
@@ -38,11 +39,14 @@ export default function Decide() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [chosen, setChosen] = useState<Recommendation | null>(null);
   const [chosenAt, setChosenAt] = useState(0);
-  const [view, setView] = useState<'main' | 'alternatives'>('main');
+  const [view, setView] = useState<'main' | 'alternatives' | 'together'>('main');
+  // Decide together: each person marks the options they'd eat; first one everyone likes wins.
+  const [turn, setTurn] = useState(0);
+  const [votes, setVotes] = useState<Record<string, number[]>>({});
   const [nudge, setNudge] = useState<Nudge | undefined>(undefined);
   const [budgetOverride, setBudgetOverride] = useState<BudgetTier | null>(null);
   const [showSwaps, setShowSwaps] = useState(false);
-  const profile = state.profile;
+  const profile = useActiveProfile(state);
 
   // History is read once per screen visit so tapping Save doesn't reshuffle the cards under the user's finger.
   const [historyAtOpen] = useState(state.history);
@@ -180,6 +184,83 @@ export default function Decide() {
   const saved = isSaved(primary.meal.id, state.history);
   const swaps = swapsFor(primary.meal, profile);
 
+  const names = eatingWithNames(state);
+  const eaters = ['You', ...names];
+
+  // ---------- Decide together ----------
+  if (view === 'together') {
+    const finished = turn >= eaters.length;
+    const match = finished ? shown.find((r) => eaters.every((_, i) => votes[r.meal.id]?.includes(i))) : undefined;
+    const toggle = (id: string) => {
+      const cur = votes[id] ?? [];
+      setVotes({ ...votes, [id]: cur.includes(turn) ? cur.filter((x) => x !== turn) : [...cur, turn] });
+    };
+    const restart = () => {
+      setVotes({});
+      setTurn(0);
+    };
+    return (
+      <Screen
+        footer={
+          !finished ? (
+            <Button
+              label={turn < eaters.length - 1 ? `Done — pass to ${eaters[turn + 1]}` : 'See the result'}
+              iconRight="arrow-forward"
+              onPress={() => setTurn(turn + 1)}
+            />
+          ) : match ? (
+            <Button label={`Let’s have ${match.meal.name.toLowerCase()}`} onPress={() => accept(match)} />
+          ) : (
+            <>
+              <Button
+                label="Show 3 new options"
+                onPress={() => {
+                  restart();
+                  refresh(nudge);
+                  setView('together');
+                }}
+              />
+              <Button label="Just pick for us" variant="secondary" onPress={() => accept(primary)} />
+            </>
+          )
+        }
+      >
+        <TextAction icon="chevron-back" a11yLabel="Back to recommendation" onPress={() => { restart(); setView('main'); }} />
+        <Title>Decide together</Title>
+        {!finished ? (
+          <Body muted>
+            <Body style={{ fontWeight: '700' }}>{eaters[turn]}</Body>: tap every option you’d happily eat.
+          </Body>
+        ) : match ? (
+          <Body>It’s a match. Everyone picked {match.meal.name.toLowerCase()}.</Body>
+        ) : (
+          <Body>No match this round. Try three new options, or let EatOS pick.</Body>
+        )}
+        {shown.map((r) => {
+          const mine = !finished && (votes[r.meal.id] ?? []).includes(turn);
+          const isMatch = match?.meal.id === r.meal.id;
+          return (
+            <Card key={r.meal.id} style={{ flexDirection: 'row', gap: space.md, padding: space.md, borderColor: mine || isMatch ? c.primary : c.border }}>
+              <MealArt meal={r.meal} variant="small" />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Heading style={{ fontSize: 16 }}>{r.meal.name}</Heading>
+                <Tags labels={mealTags(r.meal, 2)} />
+              </View>
+              {!finished ? (
+                <TextAction
+                  icon={mine ? 'heart' : 'heart-outline'}
+                  a11yLabel={`${eaters[turn]} would eat ${r.meal.name}${mine ? ', selected' : ''}`}
+                  onPress={() => toggle(r.meal.id)}
+                />
+              ) : null}
+            </Card>
+          );
+        })}
+        <Small>Works for everyone’s allergies and diets{names.length ? ` (you and ${names.join(' and ')})` : ''}.</Small>
+      </Screen>
+    );
+  }
+
   // ---------- Alternatives ----------
   if (view === 'alternatives') {
     return (
@@ -286,7 +367,16 @@ export default function Decide() {
               />
             </View>
           </Row>
-          <Button label="See Alternatives" variant="secondary" onPress={() => setView('alternatives')} />
+          <Row>
+            <View style={{ flex: 1 }}>
+              <Button label="See Alternatives" variant="secondary" onPress={() => setView('alternatives')} />
+            </View>
+            {names.length > 0 && !planning ? (
+              <View style={{ flex: 1 }}>
+                <Button label="Decide together" variant="secondary" icon="people-outline" onPress={() => setView('together')} />
+              </View>
+            ) : null}
+          </Row>
         </>
       }
     >
@@ -306,6 +396,7 @@ export default function Decide() {
       </Row>
 
       <Heading>{planning ? `Planning your ${slot.mealTime}` : 'Your Recommendation'}</Heading>
+      {names.length > 0 ? <Small>For you and {names.join(' and ')} · safe for everyone’s allergies and diets</Small> : null}
       {budgetOverride ? <Small>Showing options at a lower cost.</Small> : null}
       {primary.isNew ? <Small>Something new you might like</Small> : null}
 
