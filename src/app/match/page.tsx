@@ -87,7 +87,21 @@ function MatchContent() {
       .filter((p) => !courtPlayerIds.includes(p.id) && !lineup.selectedLiberoIds.includes(p.id))
       .map((p) => p.id);
 
-    startSet(1, lineup.officialRotationOrder, benchPlayerIds, servingFirst, lineup.selectedLiberoIds);
+    // Identify middle blockers on court for automatic libero swap
+    const middleBlockerIds = players
+      .filter(
+        (p) => p.primaryRole === 'Middle Blocker' && courtPlayerIds.includes(p.id)
+      )
+      .map((p) => p.id);
+
+    startSet(
+      1,
+      lineup.officialRotationOrder,
+      benchPlayerIds,
+      servingFirst,
+      lineup.selectedLiberoIds,
+      middleBlockerIds
+    );
     setActiveLiberoIds(lineup.selectedLiberoIds);
     setSetupMode(false);
   };

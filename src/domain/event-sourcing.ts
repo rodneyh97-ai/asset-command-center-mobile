@@ -8,7 +8,7 @@ import {
   ServingTeam,
   SetState,
 } from './types';
-import { processOurPoint, processOpponentPoint } from './rotation-engine';
+import { processOurPoint, processOpponentPoint, getAutoLiberoSwap } from './rotation-engine';
 
 export function createEvent(
   matchId: string,
@@ -33,7 +33,8 @@ function createInitialSetState(
   courtPlayers: RotationPosition[],
   benchPlayerIds: string[],
   servingTeam: ServingTeam,
-  liberoIds: string[]
+  liberoIds: string[],
+  liberoTargetPlayerIds: string[] = []
 ): SetState {
   return {
     setNumber,
@@ -50,7 +51,62 @@ function createInitialSetState(
     playerAvailability: [],
     substitutionHistory: [],
     liberoMovementLog: [],
+    liberoIds,
+    liberoTargetPlayerIds,
+    liberoAutoSwapEnabled: liberoTargetPlayerIds.length > 0,
   };
+}
+
+/**
+ * Applies any pending auto-libero swaps to the set state.
+ * May apply up to two swaps (exit then enter) if a rotation causes
+ * the libero to reach the front row while another target player
+ * enters the back row.
+ */
+function applyAutoLiberoSwaps(setState: SetState, timestamp: string): SetState {
+  let current = setState;
+
+  // First pass: check if libero needs to exit
+  const exitSwap = getAutoLiberoSwap(current, current.liberoIds);
+  if (exitSwap && !exitSwap.isEntering) {
+    const updatedCourt = current.courtPlayers.map((p) =>
+      p.playerId === exitSwap.liberoId
+        ? { ...p, playerId: exitSwap.replacedPlayerId }
+        : p
+    );
+    current = {
+      ...current,
+      courtPlayers: updatedCourt,
+      activeLiberoId: undefined,
+      liberoReplacedPlayerId: undefined,
+      liberoMovementLog: [
+        ...current.liberoMovementLog,
+        { ...exitSwap, timestamp },
+      ],
+    };
+  }
+
+  // Second pass: check if libero needs to enter
+  const enterSwap = getAutoLiberoSwap(current, current.liberoIds);
+  if (enterSwap && enterSwap.isEntering) {
+    const updatedCourt = current.courtPlayers.map((p) =>
+      p.playerId === enterSwap.replacedPlayerId
+        ? { ...p, playerId: enterSwap.liberoId }
+        : p
+    );
+    current = {
+      ...current,
+      courtPlayers: updatedCourt,
+      activeLiberoId: enterSwap.liberoId,
+      liberoReplacedPlayerId: enterSwap.replacedPlayerId,
+      liberoMovementLog: [
+        ...current.liberoMovementLog,
+        { ...enterSwap, timestamp },
+      ],
+    };
+  }
+
+  return current;
 }
 
 export function rebuildState(events: MatchEvent[]): MatchState | null {
@@ -89,17 +145,21 @@ function applyEvent(state: MatchState, event: MatchEvent): MatchState {
         benchPlayerIds: string[];
         servingTeam: ServingTeam;
         liberoIds: string[];
+        liberoTargetPlayerIds?: string[];
       };
       const newSet = createInitialSetState(
         payload.setNumber,
         payload.courtPlayers,
         payload.benchPlayerIds,
         payload.servingTeam,
-        payload.liberoIds
+        payload.liberoIds,
+        payload.liberoTargetPlayerIds || []
       );
+      // Apply initial auto-libero swap (MB may start in back row)
+      const setWithLibero = applyAutoLiberoSwaps(newSet, event.timestamp);
       return {
         ...state,
-        sets: [...state.sets, newSet],
+        sets: [...state.sets, setWithLibero],
         currentSetIndex: state.sets.length,
       };
     }
@@ -108,8 +168,9 @@ function applyEvent(state: MatchState, event: MatchEvent): MatchState {
       const currentSet = state.sets[state.currentSetIndex];
       if (!currentSet) return state;
       const result = processOurPoint(currentSet);
+      const afterLibero = applyAutoLiberoSwaps(result.setState, event.timestamp);
       const updatedSets = [...state.sets];
-      updatedSets[state.currentSetIndex] = result.setState;
+      updatedSets[state.currentSetIndex] = afterLibero;
       return { ...state, sets: updatedSets };
     }
 
@@ -117,8 +178,9 @@ function applyEvent(state: MatchState, event: MatchEvent): MatchState {
       const currentSet = state.sets[state.currentSetIndex];
       if (!currentSet) return state;
       const result = processOpponentPoint(currentSet);
+      const afterLibero = applyAutoLiberoSwaps(result.setState, event.timestamp);
       const updatedSets = [...state.sets];
-      updatedSets[state.currentSetIndex] = result.setState;
+      updatedSets[state.currentSetIndex] = afterLibero;
       return { ...state, sets: updatedSets };
     }
 

@@ -27,7 +27,8 @@ interface MatchStore {
     courtPlayers: RotationPosition[],
     benchPlayerIds: string[],
     servingTeam: ServingTeam,
-    liberoIds: string[]
+    liberoIds: string[],
+    liberoTargetPlayerIds?: string[]
   ): void;
   scoreOurPoint(): void;
   scoreOpponentPoint(): void;
@@ -86,7 +87,7 @@ export const useMatchStore = create<MatchStore>((set, get) => ({
     }
   },
 
-  startSet(setNumber, courtPlayers, benchPlayerIds, servingTeam, liberoIds) {
+  startSet(setNumber, courtPlayers, benchPlayerIds, servingTeam, liberoIds, liberoTargetPlayerIds) {
     const { state } = get();
     if (!state) return;
 
@@ -96,6 +97,7 @@ export const useMatchStore = create<MatchStore>((set, get) => ({
       benchPlayerIds,
       servingTeam,
       liberoIds,
+      liberoTargetPlayerIds: liberoTargetPlayerIds || [],
     }, false);
 
     const newState = rebuildState([...state.eventLog, event]);

@@ -190,6 +190,9 @@ export interface SetState {
   playerAvailability: PlayerAvailabilityEntry[];
   substitutionHistory: SubstitutionRecord[];
   liberoMovementLog: { liberoId: string; replacedPlayerId: string; isEntering: boolean; timestamp: string }[];
+  liberoIds: string[];
+  liberoTargetPlayerIds: string[];
+  liberoAutoSwapEnabled: boolean;
 }
 
 export interface MatchState {

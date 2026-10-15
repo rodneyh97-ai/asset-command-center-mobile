@@ -34,6 +34,12 @@ function makeSetState(overrides: Partial<SetState> = {}): SetState {
     benchPlayerIds: ['b1', 'b2'],
     substitutionCount: 0,
     timeoutsUsed: { us: 0, opponent: 0 },
+    playerAvailability: [],
+    substitutionHistory: [],
+    liberoMovementLog: [],
+    liberoIds: [],
+    liberoTargetPlayerIds: [],
+    liberoAutoSwapEnabled: false,
     ...overrides,
   };
 }
