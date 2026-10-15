@@ -6,7 +6,7 @@ import { clock } from '../clock';
 import { isSaved, mealTimeFor, recommend, swapsFor, type BudgetTier, type MealIdea, type Recommendation } from '../engine';
 import { useActiveProfile } from '../store/useActiveProfile';
 import { useStore } from '../store/AppProvider';
-import { defaultContext, eatingWithNames, nextMealSlot } from '../store/state';
+import { defaultContext, eatingWithNames, memoriesNow, nextMealSlot } from '../store/state';
 import {
   Body,
   Button,
@@ -63,8 +63,15 @@ export default function Decide() {
   );
   const result = useMemo(() => {
     if (!profile || !ctx) return null;
-    return recommend(profile, ctx, { history: historyAtOpen, exclude, nudge });
-  }, [profile, ctx, exclude, historyAtOpen, nudge]);
+    return recommend(profile, ctx, {
+      history: historyAtOpen,
+      exclude,
+      nudge,
+      memories: memoriesNow(state, clock.now()),
+      learn: state.personalization.learnFromBehavior,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- memories/eaters/settings are the inputs that matter
+  }, [profile, ctx, exclude, historyAtOpen, nudge, state.memories, state.eatingWith, state.personalization.learnFromBehavior]);
 
   const shown = result ? [result.primary, ...result.alternatives].filter((r): r is Recommendation => !!r) : [];
   const primary = shown.find((r) => r.meal.id === focusId) ?? shown[0];
@@ -86,7 +93,11 @@ export default function Decide() {
       dispatch({ type: 'setPlan', plan: { mealId: r.meal.id, mealTime: slot.mealTime, date: slot.date, setting: ctx.setting } });
       track('meal_planned', { mealTime: slot.mealTime });
     } else {
-      feedback(r.meal.id, 'accepted', { setting: ctx.setting, mealTime: ctx.mealTime, feeling: ctx.feeling });
+      feedback(r.meal.id, 'accepted', {
+        setting: ctx.setting,
+        mealTime: ctx.mealTime,
+        feeling: state.personalization.trackMood ? ctx.feeling : undefined,
+      });
       track('recommendation_accepted', { msSinceStart: t - startedAt, rank: shown.indexOf(r), wasNew: !!r.isNew });
     }
     setChosen(r);

@@ -2,7 +2,9 @@ import { Redirect, router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 
-import { CATALOG, safetyCheck, type MealIdea, type Setting } from '../../engine';
+import { clock } from '../../clock';
+import { CATALOG, dislikedFoodIn, safetyCheck, type MealIdea, type Setting } from '../../engine';
+import { memoriesNow } from '../../store/state';
 import { useActiveProfile } from '../../store/useActiveProfile';
 import { useStore } from '../../store/AppProvider';
 
@@ -30,6 +32,7 @@ export default function Search() {
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
 
+  const memories = useMemo(() => memoriesNow(state, clock.now()), [state]);
   const results = useMemo(() => {
     if (!p) return [];
     const q = query.trim().toLowerCase();
@@ -38,10 +41,11 @@ export default function Search() {
       (m) =>
         m.settings.includes(setting) &&
         safetyCheck(m, p, setting).ok && // never list something unsafe for this user
+        !dislikedFoodIn(m, memories) &&
         test(m) &&
         (!q || `${m.name} ${m.summary} ${m.cuisine}`.toLowerCase().includes(q)),
     );
-  }, [p, setting, filter, query]);
+  }, [p, setting, filter, query, memories]);
 
   if (!ready) return null; // wait for saved data before deciding where to go
   if (!p) return <Redirect href="/onboarding" />;

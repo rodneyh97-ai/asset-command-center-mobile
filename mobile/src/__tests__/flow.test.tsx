@@ -1,10 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
-import { Alert } from 'react-native';
+import { Alert, Share } from 'react-native';
 
 import { ErrorBoundary } from '../app/_layout';
 import { clock } from '../clock';
 import { CATALOG } from '../engine';
+import { MEAL_INGREDIENTS } from '../engine/ingredients';
 
 // Render the real app directory so tabs, stack screens and params all behave as in production.
 const routes = 'src/app';
@@ -333,7 +334,7 @@ describe('weekly check-in (motivational-interviewing style)', () => {
     await seed();
     renderRouter(routes, { initialUrl: '/' });
     fireEvent.press(await screen.findByLabelText('Not now, ask me later'));
-    await waitFor(() => expect(screen.queryByText(/easier this week/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText('What made eating the way you want easier this week?')).toBeNull());
   });
 });
 
@@ -493,5 +494,68 @@ describe('couples', () => {
     await screen.findByText(/No match this round/);
     fireEvent.press(screen.getByLabelText('Just pick for us'));
     await screen.findByText(/^Enjoy your/);
+  });
+});
+
+describe('memory & privacy dashboard', () => {
+  const seed = (over: object = {}) =>
+    AsyncStorage.setItem(
+      'eatos.state.v1',
+      JSON.stringify({
+        version: 1,
+        profile: { goal: 'eat_better', struggles: [], cuisines: [], allergens: [], diets: [], budget: 3, considerations: [], createdAt: new Date(Date.now() - 3 * 86400000).toISOString() },
+        history: [],
+        lastContext: { setting: 'restaurant', hunger: 'normal', time: 20, budget: 3, feeling: 'fine' },
+        analytics: [],
+        ...over,
+      }),
+    );
+
+  it('a question answered on Home becomes a visible, deletable memory', async () => {
+    await seed();
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText(/faster meals, or cheaper ones/);
+    fireEvent.press(screen.getByLabelText('Faster'));
+    await waitFor(() => expect(screen.queryByText(/faster meals, or cheaper ones/)).toBeNull());
+    screen.unmount();
+    renderRouter(routes, { initialUrl: '/knows' });
+    await screen.findByText('What EatOS knows about me');
+    expect(screen.getByText('This week, prefers: faster')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Delete: This week, prefers faster'));
+    await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!).memories).toEqual([]));
+  });
+
+  it('a food marked "don’t like" never appears on the recommendation screen', async () => {
+    await seed();
+    renderRouter(routes, { initialUrl: '/knows' });
+    fireEvent.press(await screen.findByLabelText('Mushrooms'));
+    fireEvent.press(screen.getByLabelText('Rice'));
+    screen.unmount();
+    renderRouter(routes, { initialUrl: '/decide' });
+    await screen.findByText('Your Recommendation');
+    for (const m of CATALOG.filter((x) => /rice|mushroom/.test(JSON.stringify(MEAL_INGREDIENTS[x.id])))) {
+      expect(screen.queryByText(m.name)).toBeNull();
+    }
+  });
+
+  it('guesses are shown as unconfirmed and only stored when the user decides', async () => {
+    const at = (d: number) => new Date(Date.now() - d * 86400000).toISOString();
+    await seed({ history: Array.from({ length: 8 }, (_, i) => ({ mealId: 'burrito-bowl', kind: 'loved', at: at(i) })) });
+    renderRouter(routes, { initialUrl: '/knows' });
+    await screen.findByText('You often go for Mexican food');
+    expect(JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!).memories ?? []).toEqual([]);
+    fireEvent.press(screen.getAllByLabelText('Not true')[0]);
+    await waitFor(() => expect(screen.queryByText('You often go for Mexican food')).toBeNull());
+  });
+
+  it('export shares everything EatOS stores about the user', async () => {
+    await seed();
+    const spy = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
+    renderRouter(routes, { initialUrl: '/knows' });
+    fireEvent.press(await screen.findByLabelText('Export my data'));
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    const data = JSON.parse((spy.mock.calls[0][0] as { message: string }).message);
+    expect(Object.keys(data)).toEqual(expect.arrayContaining(['profile', 'memories', 'history', 'peopleYouEatWith', 'settings']));
+    spy.mockRestore();
   });
 });

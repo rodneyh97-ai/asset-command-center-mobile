@@ -1,5 +1,7 @@
 import { CATALOG } from './catalog';
+import { ingredientsOf } from './ingredients';
 import { habitBonus, learnTaste, tasteScore, type Taste } from './learn';
+import { dislikedFoodIn, valuesOf, type Memory } from './memory';
 import type {
   Allergen,
   Context,
@@ -297,6 +299,8 @@ export interface RecommendOptions {
   learn?: boolean;
   /** One-off steering from "Not feeling these?" (more like X / something different). */
   nudge?: { moreLike?: MealIdea['cuisine']; avoid?: MealIdea['cuisine'] };
+  /** Active memories for everyone eating (caller filters out expired ones). */
+  memories?: Memory[];
 }
 
 export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions = {}): RecommendationResult {
@@ -306,11 +310,18 @@ export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions
   const exclude = new Set(opts.exclude ?? []);
   const disliked = dislikedIds(history);
   const standing = standingCautions(profile, ctx);
-  const taste = learnTaste(opts.learn === false ? [] : history, catalog, now);
+  const memories = opts.memories ?? [];
+  const taste = learnTaste(opts.learn === false ? [] : history, catalog, now, new Set(valuesOf(memories, 'not_true')));
+  const liked = valuesOf(memories, 'like_food');
+  const tradeoff = valuesOf(memories, 'tradeoff')[0];
+  const cookMinutes = Number(valuesOf(memories, 'weeknight_cook_minutes')[0] ?? NaN);
+  const skill = valuesOf(memories, 'cooking_skill')[0];
 
   const ranked: Recommendation[] = [];
   let eligibleCount = 0;
   for (const meal of catalog) {
+    // A food the user said they don't like is treated as a hard rule.
+    if (dislikedFoodIn(meal, memories)) continue;
     const elig = checkHardConstraints(meal, profile, ctx, disliked);
     if (!elig.ok) continue;
     eligibleCount++;
@@ -323,6 +334,22 @@ export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions
       reasons.push({ weight: 4, text: 'Similar to what you were looking at' });
     }
     if (opts.nudge?.avoid && meal.cuisine === opts.nudge.avoid) score -= 6;
+    // Personal memories.
+    const likedHere = ingredientsOf(meal.id).filter((i) => liked.includes(i));
+    if (likedHere.length) {
+      score += Math.min(2, likedHere.length * 1.5);
+      reasons.push({ weight: 2.5, text: `Has ${likedHere[0]}, which you like` });
+    }
+    if (tradeoff === 'faster' && meal.effort !== 'medium') {
+      score += 1.5;
+      reasons.push({ weight: 2, text: 'Quick, like you asked for this week' });
+    }
+    if (tradeoff === 'cheaper' && meal.budget === 1) {
+      score += 1.5;
+      reasons.push({ weight: 2, text: 'Low cost, like you asked for this week' });
+    }
+    if (skill === 'beginner' && meal.effort === 'medium') score -= 1.5;
+    if (Number.isFinite(cookMinutes) && ctx.setting === 'home' && ctx.mealTime === 'dinner' && meal.prepMinutes > cookMinutes) score -= 2;
     const shown = reasons
       .filter((r) => r.weight > 0 && r.text)
       .sort((a, b) => b.weight - a.weight)

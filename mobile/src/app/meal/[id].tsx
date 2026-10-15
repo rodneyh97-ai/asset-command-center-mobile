@@ -67,7 +67,7 @@ export default function MealScreen() {
                 <Button
                   label="Try this"
                   onPress={() => {
-                    feedback(meal.id, 'accepted', { setting, mealTime: view.ctx.mealTime, feeling: view.ctx.feeling });
+                    feedback(meal.id, 'accepted', { setting, mealTime: view.ctx.mealTime, feeling: state.personalization.trackMood ? view.ctx.feeling : undefined });
                     track('repeat_meal');
                     setDone(true);
                   }}

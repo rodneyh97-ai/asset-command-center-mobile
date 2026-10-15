@@ -3,11 +3,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { clock } from '../../clock';
-import { CATALOG, mealTimeFor, safetyCheck, type MealIdea } from '../../engine';
+import { CATALOG, mealTimeFor, nextQuestion, safetyCheck, valuesOf, type MealIdea } from '../../engine';
 import { useActiveProfile } from '../../store/useActiveProfile';
 import { useStore } from '../../store/AppProvider';
 import {
   checkinDue,
+  memoriesNow,
   defaultContext,
   nextMealSlot,
   pendingRating,
@@ -17,6 +18,7 @@ import {
   type SavedContext,
 } from '../../store/state';
 import { WeeklyCheckIn } from '../../ui/CheckIn';
+import { QuestionCard } from '../../ui/QuestionCard';
 import {
   Body,
   Button,
@@ -54,8 +56,9 @@ export default function Home() {
   const setting = state.lastContext?.setting ?? 'home';
   // Re-checked against today's allergies, diet, and where the user is eating.
   const quickPicks = useMemo(
-    () => (profile ? quickPicksFor(profile, state.history, setting) : []),
-    [profile, state.history, setting],
+    () => (profile ? quickPicksFor(profile, state.history, setting, 4, memoriesNow(state, clock.now())) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- memories and eaters drive memoriesNow
+    [profile, state.history, setting, state.memories, state.eatingWith],
   );
 
   // Plans whose moment has passed are dropped quietly — no guilt.
@@ -80,6 +83,13 @@ export default function Home() {
   const pendingMeal = pending ? CATALOG.find((m) => m.id === pending.mealId) : undefined;
   const week = weeklyReflection(state.history, now);
 
+  // At most one card asking something of the user at a time.
+  const question =
+    !pendingMeal && !checkinShown && !(state.plan && planStatus(state.plan, now) === 'due')
+      ? nextQuestion(state.questions, state.profile!.createdAt, now)
+      : null;
+  const preferredName = valuesOf(state.memories.filter((m) => m.subject === 'me'), 'preferred_name')[0];
+
   const decide = () => {
     dispatch({ type: 'setLastContext', context: ctx });
     track('decide_started', { setting: ctx.setting });
@@ -88,7 +98,7 @@ export default function Home() {
 
   const repeat = (m: MealIdea) => {
     if (confirmation) return; // one repeat per visit; prevents double-tap duplicates
-    feedback(m.id, 'accepted', { setting: ctx.setting, mealTime: mealTimeFor(clock.now()), feeling: ctx.feeling });
+    feedback(m.id, 'accepted', { setting: ctx.setting, mealTime: mealTimeFor(clock.now()), feeling: state.personalization.trackMood ? ctx.feeling : undefined });
     track('repeat_meal');
     setConfirmation({ text: `${m.name} it is. Enjoy.`, mealId: m.id });
   };
@@ -100,7 +110,7 @@ export default function Home() {
 
   const followPlan = () => {
     if (!plan || !planMeal) return;
-    feedback(plan.mealId, 'accepted', { setting: plan.setting, mealTime: plan.mealTime, feeling: ctx.feeling });
+    feedback(plan.mealId, 'accepted', { setting: plan.setting, mealTime: plan.mealTime, feeling: state.personalization.trackMood ? ctx.feeling : undefined });
     track('plan_followed');
     dispatch({ type: 'clearPlan' });
     setConfirmation({ text: `${planMeal.name}, as planned. Enjoy.`, mealId: plan.mealId });
@@ -140,7 +150,10 @@ export default function Home() {
       </Row>
 
       <View style={{ gap: 2 }}>
-        <Small>{now.toLocaleDateString('en-US', DATE_FMT)}</Small>
+        <Small>
+          {now.toLocaleDateString('en-US', DATE_FMT)}
+          {preferredName ? ` · Hi, ${preferredName}` : ''}
+        </Small>
         <Title>What should I eat?</Title>
       </View>
 
@@ -295,6 +308,8 @@ export default function Home() {
           ))}
         </View>
       ) : null}
+
+      {question ? <QuestionCard key={question.id} question={question} /> : null}
 
       {checkinShown ? <WeeklyCheckIn onDone={() => setCheckinPhase('thanks')} onClose={() => setCheckinPhase('closed')} /> : null}
 

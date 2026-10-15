@@ -41,7 +41,8 @@ export interface Taste {
   known: Set<string>;
 }
 
-export function learnTaste(history: FeedbackEvent[], catalog: MealIdea[], now: Date): Taste {
+/** `rejected` holds traits the user said aren't true (e.g. 'cuisine:mexican'); they're never learned. */
+export function learnTaste(history: FeedbackEvent[], catalog: MealIdea[], now: Date, rejected: Set<string> = new Set()): Taste {
   const byId = new Map(catalog.map((m) => [m.id, m]));
   const sums = new Map<string, { sum: number; n: number }>();
   const habits = new Map<string, number>();
@@ -67,7 +68,7 @@ export function learnTaste(history: FeedbackEvent[], catalog: MealIdea[], now: D
     }
   }
   const affinity = new Map<string, number>();
-  for (const [f, s] of sums) affinity.set(f, s.sum / (s.n + PRIOR));
+  for (const [f, s] of sums) if (!rejected.has(f)) affinity.set(f, s.sum / (s.n + PRIOR));
   return { affinity, evidence, habits, known };
 }
 
@@ -120,3 +121,24 @@ export function habitBonus(
   if (count < 1.5) return { points: 0 };
   return { points: Math.min(3, count), reason: `Your usual for ${mealTime} ${SETTING_PHRASE[setting]}` };
 }
+
+/** Patterns EatOS has noticed but the user hasn't confirmed. Shown as "EatOS thinks…", never stored as facts. */
+export function inferredTraits(taste: Taste): { trait: string; text: string }[] {
+  if (taste.evidence < 3) return [];
+  const out: { trait: string; text: string }[] = [];
+  for (const [trait, a] of taste.affinity) {
+    if (a < 0.4) continue;
+    const [kind, v] = trait.split(':');
+    if (kind === 'cuisine' && CUISINE_WORD[v as Cuisine]) out.push({ trait, text: `You often go for ${CUISINE_WORD[v as Cuisine]} food` });
+    else if (trait === 'effort:none') out.push({ trait, text: 'You prefer meals that take no cooking' });
+    else if (trait === 'protein') out.push({ trait, text: 'You lean toward protein-rich meals' });
+    else if (trait === 'comfort') out.push({ trait, text: 'You enjoy comfort food' });
+  }
+  return out.slice(0, 5);
+}
+
+/** Convenience: learn from history and list what EatOS has noticed. */
+export function inferredTaste(history: FeedbackEvent[], catalog: MealIdea[], now: Date) {
+  return inferredTraits(learnTaste(history, catalog, now));
+}
+

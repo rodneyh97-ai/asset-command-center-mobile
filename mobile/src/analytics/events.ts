@@ -33,6 +33,7 @@ export type AnalyticsName =
   | 'search_used'
   | 'app_lock_changed'
   | 'member_saved'
+  | 'question_answered'
   | 'goal_changed';
 
 export interface AnalyticsEvent {

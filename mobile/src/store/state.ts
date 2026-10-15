@@ -1,6 +1,7 @@
 // Pure app-state logic (no React, no storage) so it can be unit-tested.
 import { CATALOG, safetyCheck, type Context, type FeedbackEvent, type FeedbackKind, type Feeling, type MealIdea, type MealTime, type Profile, type Setting } from '../engine';
 import { combineProfiles, sanitizeMembers, type Member } from '../engine/household';
+import { activeMemories, dislikedFoodIn, sanitizeMemories, upsertMemory, type Memory } from '../engine/memory';
 import { isSaved } from '../engine/recommend';
 import { sanitizeContext, sanitizeFeedback, sanitizeProfile, VALID } from '../engine/validate';
 import type { AnalyticsEvent } from '../analytics/events';
@@ -34,6 +35,12 @@ export interface AppState {
   members: Member[];
   /** Who's eating right now (member ids); empty = just me. */
   eatingWith: string[];
+  /** Long-term personal memories (see engine/memory.ts). */
+  memories: Memory[];
+  /** User controls over personalization. */
+  personalization: { learnFromBehavior: boolean; trackMood: boolean };
+  /** One-question-at-a-time prompts: when each was answered/skipped, and the last time one was shown. */
+  questions: { done: Record<string, string>; lastShownAt: string | null };
   /** Weekly reflection: when it last happened / was snoozed until. */
   checkin: { lastAt: string | null; snoozeUntil: string | null };
   /**
@@ -62,6 +69,9 @@ export const initialState: AppState = {
   crashReports: true,
   members: [],
   eatingWith: [],
+  memories: [],
+  personalization: { learnFromBehavior: true, trackMood: true },
+  questions: { done: {}, lastShownAt: null },
   appLock: false,
   sessionUnlockedAt: null,
   premiumInterest: false,
@@ -85,6 +95,11 @@ export type Action =
   | { type: 'saveMember'; member: Member }
   | { type: 'removeMember'; id: string }
   | { type: 'setEatingWith'; ids: string[] }
+  | { type: 'remember'; memory: Memory }
+  | { type: 'forget'; id: string }
+  | { type: 'setPersonalization'; patch: Partial<AppState['personalization']> }
+  | { type: 'questionDone'; id: string; at: string }
+  | { type: 'questionShown'; at: string }
   | { type: 'setAppLock'; on: boolean; at: number }
   | { type: 'unlocked'; at: number }
   | { type: 'setPremiumInterest'; on: boolean }
@@ -150,8 +165,20 @@ export function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         members: state.members.filter((m) => m.id !== action.id),
+        memories: state.memories.filter((m) => m.subject !== action.id),
         eatingWith: state.eatingWith.filter((x) => x !== action.id),
       };
+    case 'remember':
+      return { ...state, memories: upsertMemory(state.memories, action.memory) };
+    case 'forget':
+      return { ...state, memories: state.memories.filter((m) => m.id !== action.id) };
+    case 'setPersonalization':
+      return { ...state, personalization: { ...state.personalization, ...action.patch } };
+    case 'questionDone':
+      // Answering or skipping counts as today's question, so at most one per day.
+      return { ...state, questions: { done: { ...state.questions.done, [action.id]: action.at }, lastShownAt: action.at } };
+    case 'questionShown':
+      return { ...state, questions: { ...state.questions, lastShownAt: action.at } };
     case 'setEatingWith':
       return { ...state, eatingWith: action.ids.filter((id) => state.members.some((m) => m.id === id)) };
     case 'setCrashReports':
@@ -205,6 +232,12 @@ export function parseStored(raw: string | null): AppState {
       : [],
     crashReports: d.crashReports !== false,
     members: sanitizeMembers(d.members),
+    memories: sanitizeMemories(d.memories, sanitizeMembers(d.members).map((m) => m.id)),
+    personalization: {
+      learnFromBehavior: (d.personalization as Record<string, unknown> | undefined)?.learnFromBehavior !== false,
+      trackMood: (d.personalization as Record<string, unknown> | undefined)?.trackMood !== false,
+    },
+    questions: sanitizeQuestions(d.questions),
     eatingWith: Array.isArray(d.eatingWith)
       ? d.eatingWith.filter((id): id is string => typeof id === 'string' && sanitizeMembers(d.members).some((m) => m.id === id))
       : [],
@@ -213,6 +246,17 @@ export function parseStored(raw: string | null): AppState {
     premiumInterest: d.premiumInterest === true,
     checkin: sanitizeCheckin(d.checkin),
   };
+}
+
+function sanitizeQuestions(raw: unknown): AppState['questions'] {
+  const ok = (v: unknown) => typeof v === 'string' && !Number.isNaN(Date.parse(v));
+  if (!raw || typeof raw !== 'object') return { done: {}, lastShownAt: null };
+  const q = raw as { done?: unknown; lastShownAt?: unknown };
+  const done: Record<string, string> = {};
+  if (q.done && typeof q.done === 'object') {
+    for (const [k, v] of Object.entries(q.done as Record<string, unknown>).slice(0, 50)) if (/^[a-z_]{1,40}$/.test(k) && ok(v)) done[k] = v as string;
+  }
+  return { done, lastShownAt: ok(q.lastShownAt) ? (q.lastShownAt as string) : null };
 }
 
 function sanitizeCheckin(raw: unknown): AppState['checkin'] {
@@ -282,12 +326,13 @@ export interface QuickPick {
 }
 
 /** Saved + recent meals for one-tap repeat that are possible where the user is and safe for them today. */
-export function quickPicksFor(profile: Profile, history: FeedbackEvent[], setting: Setting, limit = 4): QuickPick[] {
+export function quickPicksFor(profile: Profile, history: FeedbackEvent[], setting: Setting, limit = 4, memories: Memory[] = []): QuickPick[] {
   const ids = [...CATALOG.filter((m) => isSaved(m.id, history)).map((m) => m.id), ...recentMealIds(history)];
   const out: QuickPick[] = [];
   for (const id of new Set(ids)) {
     const meal = CATALOG.find((m) => m.id === id);
     if (!meal || !meal.settings.includes(setting)) continue; // only meals possible where the user is
+    if (dislikedFoodIn(meal, memories)) continue;
     const safety = safetyCheck(meal, profile, setting);
     if (!safety.ok) continue;
     out.push({ meal, saved: isSaved(id, history), cautions: safety.cautions });
@@ -344,4 +389,9 @@ export function activeProfile(state: AppState): Profile | null {
 
 export function eatingWithNames(state: AppState): string[] {
   return state.members.filter((m) => state.eatingWith.includes(m.id)).map((m) => m.name);
+}
+
+/** Memories that apply right now for me + whoever I'm eating with. */
+export function memoriesNow(state: AppState, now: Date): Memory[] {
+  return activeMemories(state.memories, now, ['me', ...state.eatingWith]);
 }

@@ -105,6 +105,8 @@ export default function ProfileScreen() {
         </LinearGradient>
       </Pressable>
 
+      <Button label="What EatOS knows about me" variant="secondary" icon="finger-print-outline" iconRight="chevron-forward" onPress={() => router.push('/knows')} />
+
       <Heading>Main goal</Heading>
       {changingGoal ? (
         GOALS.map((g) => <OptionCard key={g.value} icon={g.icon} title={g.label} subtitle={g.subtitle} selected={p.goal === g.value} onPress={() => changeGoal(g.value)} />)

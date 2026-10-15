@@ -11,5 +11,8 @@ export {
   safetyCheck,
   ALLERGEN_LABEL,
 } from './recommend';
-export { learnTaste, tasteScore, habitBonus, mealFeatures } from './learn';
+export { learnTaste, tasteScore, habitBonus, mealFeatures, inferredTraits, inferredTaste } from './learn';
 export { combineProfiles, sanitizeMembers, type Member } from './household';
+export * from './memory';
+export { INGREDIENTS, ingredientsOf, type Ingredient } from './ingredients';
+export { QUESTIONS, nextQuestion, type Question } from './questions';
