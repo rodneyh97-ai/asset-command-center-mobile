@@ -38,3 +38,11 @@ Risk: someone with a severe allergy may still choose a cross-contact meal. Every
 
 **D10 — On-device crash capture instead of a crash service (for now).** Errors are recorded locally (capped, truncated) and included in the user-shared summary. Sentry is the upgrade path once you approve a new service. 2026-10-15.
 
+**D11 — Personalization is on-device statistics, not AI.** Trait affinities with a 30-day half-life, shrinkage, habit detection, and one exploration slot. Free per decision, explainable ("You often go for Mexican food"), private. Simulation: 57% → 93% hit rate vs. a static app. AI can be A/B tested later against this baseline. 2026-10-15.
+
+**D12 — Sentry crash reports default ON when a DSN is configured (NEEDS FOUNDER SIGN-OFF).** Reports are scrubbed (no user, breadcrumbs, extras, device name) and users can switch them off. Alternative: default OFF (fewer crash reports during the 20-user test). 2026-10-15.
+
+**D13 — Planning and reminders over streaks.** Plans (implementation intentions, d = 0.65) and opt-in reminders support follow-through without guilt. No streaks, no "you missed" messages. 2026-10-15.
+
+**D14 — NEPQ replaced by motivational interviewing.** NEPQ has no peer-reviewed evidence; MI does (g = 0.28). Questions stay short, open, and autonomy-respecting. 2026-10-15.
+

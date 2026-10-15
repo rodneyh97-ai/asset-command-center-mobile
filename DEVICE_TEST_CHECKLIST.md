@@ -27,7 +27,13 @@ Everything below **cannot be tested from the cloud**. Run it on at least one iPh
 - [ ] **VoiceOver** (iOS) / **TalkBack** (Android) on → you can complete setup and get a recommendation using only the screen reader; buttons read sensible names
 - [ ] Smallest phone you can find (iPhone SE size) → no text cut off
 
-## 5. Edge cases
+## 5. New features
+- [ ] Home → **Plan my lunch/dinner** → pick a meal → at that meal time, Home shows "Your plan for …" → **Having it** works
+- [ ] Preferences → Reminders → tap **Lunch** → phone asks permission once → allow → a reminder arrives at 11:45
+- [ ] Turn reminders off → no more reminders
+- [ ] Use EatOS for a week → a "Weekly check-in" card appears; **Not now** hides it
+
+## 6. Edge cases
 - [ ] Airplane mode → app works normally (it needs no internet)
 - [ ] Rotate phone → app stays portrait
 - [ ] Preferences → **Share my usage summary** → share sheet opens; message has no allergy/diet info

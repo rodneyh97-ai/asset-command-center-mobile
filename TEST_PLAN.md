@@ -2,7 +2,7 @@
 
 Run: `cd mobile && npm test && npm run typecheck && npm run lint`
 
-## Automated (113 tests, all passing 10 consecutive runs as of 2026-10-15)
+## Automated (154 tests; see stability note below)
 | Area | File | What's covered |
 |---|---|---|
 | Allergy filtering | `src/engine/__tests__/recommend.test.ts` | Each of 9 allergens × every setting/meal time/time/budget combination never yields a `contains` match; outside home never yields `mayContain`; at-home label caution; staff-confirm caution; multi-allergy; swaps never add allergens |
@@ -18,11 +18,16 @@ Run: `cd mobile && npm test && npm run typecheck && npm run lint`
 
 | **Adversarial** | `src/__tests__/attacks.test.ts` | 20,000-case seeded fuzz of allergy/diet/alternatives invariants; "Have again" allergy & diet bypass; ingredient-text vs allergen-tag audit; hostile/corrupt storage payloads (bad enums, prototype pollution, junk history); newer-version data preserved; hostile deep links (path traversal, `javascript:`, oversized, unknown routes) |
 | **Coverage** | `src/engine/__tests__/coverage.test.ts` | 12 user types (no restriction, vegetarian, vegan, each major allergy, combos) × 320 situations: every one gets ≥1 option that fits the meal time. `COVERAGE_REPORT=1` prints the table |
+| **Learning** | `src/engine/__tests__/learning.test.ts` | 60-day simulation of 5 hidden-taste personas: full learning ≥ static app per persona, improves over time, beats static by ≥15 pts and memory-only by ≥5 pts on average; single events don't overreact; old behaviour fades; learning never overrides allergies; taste capped; exploration slot; habits |
+| **Planning** | `state.test.ts`, `flow.test.tsx` | next-meal slot at every time of day; due/upcoming/expired; plan → one-tap "Having it" at meal time (time travel); missed plan disappears quietly; plan re-checked after new allergy |
+| **Reminders** | `src/notifications/__tests__/reminders.test.ts` | one per chosen meal, replace not duplicate, off cancels all, no guilt copy, permission asked only when needed |
+| **Weekly check-in** | `state.test.ts`, `flow.test.tsx` | timing (≥1 week, ≥3 decisions, snooze); two questions; focus changes only with consent |
+| **Sentry** | `src/analytics/__tests__/sentry.test.ts` | off without DSN; privacy-safe options; off switch; scrubs user/request/extras/breadcrumbs/device name |
 | **Crash capture** | `src/analytics/__tests__/crash.test.ts` | records, caps, truncates; survives corrupt log; global handler chains |
 | **Adversarial (UI)** | `src/__tests__/flow.test.tsx` | deep links to /decide & /settings with no profile; /onboarding can't overwrite profile; double-tap records one decision and doesn't dismiss confirmation; storage read failure never overwrites data; garbage storage backed up and app still opens; crash screen; restore hidden meals |
 
 ## Browser sweep (automated, Playwright + axe-core, run 3× consecutively)
-4 sizes (320, 390, 430, 768 px) × light/dark. Each run: full onboarding with allergies + diet + gentle mode, all 5 locations, "Something else" until exhausted, save, double-tap accept, reload persistence, Preferences, keyboard-only navigation. Checks: page errors, console errors, horizontal overflow, WCAG 2.1 AA (axe), touch targets ≥ 44px, empty results, weight language in gentle mode. Result: 0 findings.
+4 sizes (320, 390, 430, 768 px) × light/dark. Each run: full onboarding with allergies + diet + gentle mode, all 5 locations, "Something else" until exhausted, save, double-tap accept, reload persistence, Preferences, keyboard-only navigation. Checks: page errors, console errors, horizontal overflow, WCAG 2.1 AA (axe), touch targets ≥ 44px, empty results, weight language in gentle mode. Also covers: Plan-my-next-meal screens. Result: 0 findings (final run on the finished build).
 
 ## Native builds
 `expo export` for iOS and Android compiles to Hermes bytecode without errors. `expo-doctor`: 19/21 pass; the 2 failures need Expo's servers, which this sandbox's network blocks.

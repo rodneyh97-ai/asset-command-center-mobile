@@ -35,3 +35,5 @@ npm run lint
 | `TEST_PLAN.md` | What's tested, what isn't |
 | `DEVICE_TEST_CHECKLIST.md` | 20-minute checklist to run on real phones |
 | `PRIVACY_POLICY.md` | Draft privacy policy (needs review before publishing) |
+| `RESEARCH.md` | Evidence behind the design, competitor take/leave, learning results |
+| `OWNERSHIP.md` | What you own, what you rent, and the exit path for each |

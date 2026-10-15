@@ -11,8 +11,8 @@ Onboarding, saved preferences, daily decision, rules engine, feedback, one-tap r
 - [ ] App icon, splash, bundle identifiers (needs founder decisions)
 - [x] Close coverage gaps (58 patterns; 0% no-fit across 12 user types) — expand toward ~80 for variety
 - [x] Crash capture (on-device), privacy manifest config, privacy policy draft, device checklist
-- [ ] Founder sign-off on the three-tier allergen model (DECISIONS D9)
-- [ ] Optional daily reminder (user-chosen time, off by default) via expo-notifications
+- [x] On-device learning, next-meal planning, opt-in reminders, weekly check-in, Sentry (self-host ready)
+- [ ] Founder sign-off on the three-tier allergen model (D9) and crash-report default (D12)
 - [ ] Founder review of every catalog entry (allergen tags especially)
 
 ## Phase 3: Validation (20 users × 14 days)

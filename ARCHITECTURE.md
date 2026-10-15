@@ -8,15 +8,20 @@ mobile/                      Expo SDK 57 · React Native 0.86 · TypeScript · E
     catalog.ts               58 curated meal patterns; allergens tiered contains / mayContain / removable / crossContact
     recommend.ts             Hard filters → scoring → explanations → cautions; shared safetyCheck()
     validate.ts              Field-by-field validation of anything read from storage
+    learn.ts                 On-device taste learning: decayed trait affinities, habits, exploration
   src/security/links.ts      Deep-link allowlist (used by src/app/+native-intent.tsx)
   vendor/decode-uri-component  Patched link decoder (see DECISIONS D8)
   src/store/                 App state (pure reducer) + AsyncStorage persistence (on-device only)
   src/analytics/events.ts    Privacy-first local event log + validation metrics
   src/analytics/crash.ts     On-device crash capture (global handler + error screen)
+  src/analytics/sentry.ts    Optional Sentry/GlitchTip reporting (off without DSN; scrubbed; user toggle)
+  src/notifications/         Opt-in local meal reminders
+  src/ui/CheckIn.tsx         Weekly motivational-interviewing-style check-in
+  src/clock.ts               Single source of "now" (lets tests time-travel)
   src/ui/                    Design tokens (light/dark), reusable components, labels
   src/app/                   Screens: onboarding, index (home), decide, settings
 ```
-- **No backend, no accounts, no network calls.** All data stays on the device. Nothing to secure server-side yet, and no API keys exist.
+- **No backend, no accounts.** All user data stays on the device. The only optional network call is an anonymous, scrubbed crash report when a Sentry DSN is configured. Nothing to secure server-side yet, and no API keys exist.
 - **Recommendation engine:** deterministic rules. Hard constraints (allergy, diet, location, time, budget+2, disliked) remove meals; soft scoring ranks the rest (goal, cuisine, hunger, mood, struggles, saved/loved/accepted history, recent-repeat and swap penalties). Every pick carries human-readable reasons. Runs in <5 ms on-device; costs $0 per decision.
 
 ## Next (when validation justifies it)

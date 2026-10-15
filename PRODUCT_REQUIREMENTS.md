@@ -13,7 +13,10 @@ A useful answer to "what should I eat right now?" in under 15 seconds, with no l
 3. **Recommendation:** one primary pick, ≤2 alternatives, "why this fits", how to make or order it, swaps, typical cost tier, safety notes.
 4. **Actions:** I'll have this · Something else · Save · Not for me.
 5. **Return loop:** next open asks "How was it?" (Loved it / Fine / Not again) with one tap. "Have again" gives one-tap repeats of saved and recent meals. A one-line weekly reflection, no streaks.
-6. **Preferences:** edit everything; changing the main goal requires an explicit confirmation. Delete all data.
+6. **Preferences:** edit everything; changing the main goal requires an explicit confirmation. Delete all data. Opt-in reminders.
+7. **Plan my next meal:** decide ahead; one tap ("Having it") when the time comes.
+8. **Gets smarter:** on-device learning of tastes and habits, plus one "something new" slot.
+9. **Weekly check-in:** two open questions; focus changes only with consent.
 
 ## Hard rules
 - Allergies and diets are **constraints, not preferences**. See `DECISIONS.md` D4.

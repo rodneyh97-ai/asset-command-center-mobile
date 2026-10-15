@@ -54,6 +54,7 @@ export default function Home() {
     opts.find((o) => o.value === v)?.label ?? '';
 
   const decide = () => {
+    setEditing(false); // come back to a compact home screen
     dispatch({ type: 'setLastContext', context: ctx });
     track('decide_started', { setting: ctx.setting });
     router.push('/decide');
@@ -163,6 +164,7 @@ export default function Home() {
           <ChipGroup label="Time until you eat" options={TIMES} value={ctx.time} onChange={(v) => setCtx({ time: v })} />
           <ChipGroup label="Budget" options={BUDGETS} value={ctx.budget} onChange={(v) => setCtx({ budget: v })} />
           <ChipGroup label="How are you feeling?" options={FEELINGS} value={ctx.feeling} onChange={(v) => setCtx({ feeling: v })} />
+          <TextAction label="Done" a11yLabel="Done changing settings" onPress={() => setEditing(false)} />
         </>
       ) : (
         <Pressable
@@ -185,6 +187,7 @@ export default function Home() {
           label={`Plan my ${nextMealSlot(now).mealTime}`}
           variant="ghost"
           onPress={() => {
+            setEditing(false);
             dispatch({ type: 'setLastContext', context: ctx });
             router.push('/decide?plan=1');
           }}

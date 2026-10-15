@@ -52,6 +52,17 @@ describe('core daily flow', () => {
     await screen.findByText(/^Enjoy your/);
   });
 
+  it('home returns to its compact form after deciding', async () => {
+    await onboard();
+    fireEvent.press(screen.getByLabelText(/^Current settings/));
+    expect(screen.getByText('How hungry?')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Help me decide'));
+    await screen.findByText('Your best option right now');
+    fireEvent.press(screen.getByLabelText('Back'));
+    await screen.findByText('What should I eat?');
+    expect(screen.queryByText('How hungry?')).toBeNull();
+  });
+
   it('persists preferences: a returning user skips onboarding', async () => {
     await onboard();
     const raw = await AsyncStorage.getItem('eatos.state.v1');
