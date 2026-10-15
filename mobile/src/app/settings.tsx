@@ -1,3 +1,4 @@
+import { clock } from '../clock';
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, Share } from 'react-native';
@@ -95,7 +96,7 @@ export default function Settings() {
         hint="Opens the share sheet with counts only — no allergies, diets, or meals"
         onPress={async () => {
           const crashes = await readCrashes();
-          const message = [summaryText(state.analytics, new Date()), ...crashSummaryLines(crashes)].join('\n');
+          const message = [summaryText(state.analytics, clock.now()), ...crashSummaryLines(crashes)].join('\n');
           await Share.share({ message }).catch(() => {});
         }}
       />

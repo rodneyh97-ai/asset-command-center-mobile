@@ -1,4 +1,5 @@
 import { CATALOG } from './catalog';
+import { habitBonus, learnTaste, tasteScore, type Taste } from './learn';
 import type {
   Allergen,
   Context,
@@ -29,6 +30,8 @@ export const ALLERGEN_LABEL: Record<Allergen, string> = {
 
 const OUTSIDE_HOME = new Set<Setting>(['takeout', 'restaurant', 'on_the_go']);
 const HUNGER_RANK = { light: 0, normal: 1, very: 2 } as const;
+/** Decayed signals needed before EatOS starts mixing in new things to try. */
+const EXPLORE_AFTER = 4;
 
 export function mealTimeFor(date: Date): MealTime {
   const h = date.getHours() + date.getMinutes() / 60;
@@ -173,6 +176,7 @@ function scoreMeal(
   ctx: Context,
   history: FeedbackEvent[],
   now: Date,
+  taste: Taste,
 ): { score: number; reasons: ScoredReason[] } {
   const reasons: ScoredReason[] = [];
   const add = (weight: number, text: string) => reasons.push({ weight, text });
@@ -252,6 +256,12 @@ function scoreMeal(
   const recentSwaps = mine.filter((e) => e.kind === 'swapped' && now.getTime() - Date.parse(e.at) < 7 * DAY);
   if (recentSwaps.length > 0) add(-Math.min(recentSwaps.length, 3), '');
 
+  // Learned over time from this user's own choices (on-device).
+  const learned = tasteScore(meal, taste);
+  if (learned.points !== 0) add(learned.points, learned.reason ?? '');
+  const habit = habitBonus(meal, ctx.setting, ctx.mealTime, taste);
+  if (habit.points > 0) add(habit.points, habit.reason ?? '');
+
   const score = reasons.reduce((s, r) => s + r.weight, 0);
   return { score, reasons };
 }
@@ -282,6 +292,8 @@ export interface RecommendOptions {
   exclude?: string[];
   now?: Date;
   catalog?: MealIdea[];
+  /** Set false to ignore learned taste (used to measure how much learning helps). */
+  learn?: boolean;
 }
 
 export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions = {}): RecommendationResult {
@@ -291,6 +303,7 @@ export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions
   const exclude = new Set(opts.exclude ?? []);
   const disliked = dislikedIds(history);
   const standing = standingCautions(profile, ctx);
+  const taste = learnTaste(opts.learn === false ? [] : history, catalog, now);
 
   const ranked: Recommendation[] = [];
   let eligibleCount = 0;
@@ -299,7 +312,7 @@ export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions
     if (!elig.ok) continue;
     eligibleCount++;
     if (exclude.has(meal.id)) continue;
-    const { score, reasons } = scoreMeal(meal, profile, ctx, history, now);
+    const { score, reasons } = scoreMeal(meal, profile, ctx, history, now, taste);
     const shown = reasons
       .filter((r) => r.weight > 0 && r.text)
       .sort((a, b) => b.weight - a.weight)
@@ -332,6 +345,19 @@ export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions
   for (const r of rest) {
     if (alternatives.length >= 2) break;
     if (!alternatives.includes(r)) alternatives.push(r);
+  }
+
+  // Exploration: once EatOS knows the user, keep one slot for the best-fitting meal
+  // they've never tried, so learning never collapses into the same few meals.
+  if (taste.evidence >= EXPLORE_AFTER && alternatives.length === 2) {
+    const shownIds = new Set([primary, ...alternatives].map((r) => r.meal.id));
+    const allKnown = [primary, ...alternatives].every((r) => taste.known.has(r.meal.id));
+    const fresh = rest.find(
+      (r) => !taste.known.has(r.meal.id) && !shownIds.has(r.meal.id) && r.meal.mealTimes.includes(ctx.mealTime),
+    );
+    if (allKnown && fresh) {
+      alternatives[1] = { ...fresh, isNew: true, reasons: ['Something new you might like', ...fresh.reasons].slice(0, 3) };
+    }
   }
   return { primary, alternatives };
 }

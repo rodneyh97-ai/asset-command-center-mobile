@@ -1,7 +1,7 @@
 // Pure app-state logic (no React, no storage) so it can be unit-tested.
-import { CATALOG, safetyCheck, type Context, type FeedbackEvent, type FeedbackKind, type MealIdea, type Profile, type Setting } from '../engine';
+import { CATALOG, safetyCheck, type Context, type FeedbackEvent, type FeedbackKind, type MealIdea, type MealTime, type Profile, type Setting } from '../engine';
 import { isSaved } from '../engine/recommend';
-import { sanitizeContext, sanitizeFeedback, sanitizeProfile } from '../engine/validate';
+import { sanitizeContext, sanitizeFeedback, sanitizeProfile, VALID } from '../engine/validate';
 import type { AnalyticsEvent } from '../analytics/events';
 
 export const SCHEMA_VERSION = 1;
@@ -17,11 +17,21 @@ export interface AppState {
   /** Last context the user picked; used as the default next time so they don't re-answer. */
   lastContext: SavedContext | null;
   analytics: AnalyticsEvent[];
+  /** The user's plan for their next meal (implementation intention), if any. */
+  plan: MealPlan | null;
   /**
    * Raw stored data we couldn't read (newer app version, corruption). Never persisted
    * as state; the provider copies it to a backup key before anything overwrites it.
    */
   unreadable?: string;
+}
+
+export interface MealPlan {
+  mealId: string;
+  mealTime: Exclude<MealTime, 'snack'>;
+  /** Local calendar date, YYYY-MM-DD. */
+  date: string;
+  setting: Setting;
 }
 
 export const initialState: AppState = {
@@ -30,6 +40,7 @@ export const initialState: AppState = {
   history: [],
   lastContext: null,
   analytics: [],
+  plan: null,
 };
 
 export type Action =
@@ -37,11 +48,13 @@ export type Action =
   | { type: 'completeOnboarding'; profile: Profile }
   | { type: 'updateProfile'; patch: Partial<Omit<Profile, 'createdAt'>> }
   | { type: 'setLastContext'; context: SavedContext }
-  | { type: 'feedback'; mealId: string; kind: FeedbackKind; at: string }
+  | { type: 'feedback'; mealId: string; kind: FeedbackKind; at: string; setting?: Setting; mealTime?: MealTime }
   | { type: 'track'; event: AnalyticsEvent }
   | { type: 'deleteAll' }
   | { type: 'clearHidden' }
-  | { type: 'undoAccept'; mealId: string };
+  | { type: 'undoAccept'; mealId: string }
+  | { type: 'setPlan'; plan: MealPlan }
+  | { type: 'clearPlan' };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -57,7 +70,16 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'feedback':
       return {
         ...state,
-        history: [...state.history, { mealId: action.mealId, kind: action.kind, at: action.at }].slice(-MAX_HISTORY),
+        history: [
+          ...state.history,
+          {
+            mealId: action.mealId,
+            kind: action.kind,
+            at: action.at,
+            ...(action.setting ? { setting: action.setting } : {}),
+            ...(action.mealTime ? { mealTime: action.mealTime } : {}),
+          },
+        ].slice(-MAX_HISTORY),
       };
     case 'track':
       return { ...state, analytics: [...state.analytics, action.event].slice(-MAX_ANALYTICS) };
@@ -68,6 +90,10 @@ export function reducer(state: AppState, action: Action): AppState {
       if (i === -1) return state;
       return { ...state, history: [...state.history.slice(0, i), ...state.history.slice(i + 1)] };
     }
+    case 'setPlan':
+      return { ...state, plan: action.plan };
+    case 'clearPlan':
+      return { ...state, plan: null };
     case 'clearHidden':
       return { ...state, history: state.history.filter((e) => e.kind !== 'disliked') };
   }
@@ -107,7 +133,48 @@ export function parseStored(raw: string | null): AppState {
           )
           .slice(-MAX_ANALYTICS)
       : [],
+    plan: sanitizePlan(d.plan),
   };
+}
+
+function sanitizePlan(raw: unknown): MealPlan | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const p = raw as Record<string, unknown>;
+  if (typeof p.mealId !== 'string' || !CATALOG.some((m) => m.id === p.mealId)) return null;
+  if (!['breakfast', 'lunch', 'dinner'].includes(p.mealTime as string)) return null;
+  if (typeof p.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(p.date)) return null;
+  if (!VALID.setting.includes(p.setting as Setting)) return null;
+  return { mealId: p.mealId, mealTime: p.mealTime as MealPlan['mealTime'], date: p.date, setting: p.setting as Setting };
+}
+
+// ---------- Planning (implementation intentions) ----------
+
+const SLOT_START: Record<MealPlan['mealTime'], number> = { breakfast: 5, lunch: 11, dinner: 17 };
+
+export function localDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** The next main meal after "now": what the user would plan for. */
+export function nextMealSlot(now: Date): { mealTime: MealPlan['mealTime']; date: string } {
+  const h = now.getHours() + now.getMinutes() / 60;
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  if (h < 5) return { mealTime: 'breakfast', date: localDate(now) };
+  if (h < 10.5) return { mealTime: 'lunch', date: localDate(now) };
+  if (h < 17) return { mealTime: 'dinner', date: localDate(now) };
+  return { mealTime: 'breakfast', date: localDate(tomorrow) };
+}
+
+/** due: it's that meal's time now. upcoming: later. expired: the moment has passed (dropped quietly). */
+export function planStatus(plan: MealPlan, now: Date): 'due' | 'upcoming' | 'expired' {
+  const [y, m, d] = plan.date.split('-').map(Number);
+  const start = new Date(y, m - 1, d, SLOT_START[plan.mealTime]);
+  const nextSlot = plan.mealTime === 'breakfast' ? 11 : plan.mealTime === 'lunch' ? 17 : 24 + 3;
+  const end = new Date(y, m - 1, d, nextSlot);
+  if (now < start) return 'upcoming';
+  if (now < end) return 'due';
+  return 'expired';
 }
 
 export interface QuickPick {

@@ -1,16 +1,19 @@
-import { Redirect, router } from 'expo-router';
+import { clock } from '../clock';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { isSaved, mealTimeFor, recommend, swapsFor, type Recommendation } from '../engine';
 import { useStore } from '../store/AppProvider';
-import { defaultContext } from '../store/state';
+import { defaultContext, nextMealSlot } from '../store/state';
 import { Body, Button, Card, Cautions, Heading, Screen, Small, TextAction, Title } from '../ui/components';
 import { BUDGET_SHORT } from '../ui/labels';
 import { space, useColors } from '../ui/theme';
 
 export default function Decide() {
-  const { state, track, feedback } = useStore();
+  const { state, dispatch, track, feedback } = useStore();
+  const planning = useLocalSearchParams<{ plan?: string }>().plan === '1';
+  const [slot] = useState(() => nextMealSlot(clock.now()));
   const c = useColors();
   const [startedAt] = useState(now);
   const [exclude, setExclude] = useState<string[]>([]);
@@ -21,11 +24,20 @@ export default function Decide() {
 
   // History is read once per screen visit so tapping Save doesn't reshuffle the cards under the user's finger.
   const [historyAtOpen] = useState(state.history);
+  const ctx = useMemo(
+    () =>
+      profile
+        ? {
+            ...(state.lastContext ?? defaultContext(profile)),
+            mealTime: planning ? slot.mealTime : mealTimeFor(clock.now()),
+          }
+        : null,
+    [profile, state.lastContext, planning, slot],
+  );
   const result = useMemo(() => {
-    if (!profile) return null;
-    const ctx = { ...(state.lastContext ?? defaultContext(profile)), mealTime: mealTimeFor(new Date()) };
+    if (!profile || !ctx) return null;
     return recommend(profile, ctx, { history: historyAtOpen, exclude });
-  }, [profile, state.lastContext, exclude, historyAtOpen]);
+  }, [profile, ctx, exclude, historyAtOpen]);
 
   const shown = result ? [result.primary, ...result.alternatives].filter((r): r is Recommendation => !!r) : [];
   const primary = shown.find((r) => r.meal.id === focusId) ?? shown[0];
@@ -40,10 +52,15 @@ export default function Decide() {
   if (!profile || !result) return <Redirect href="/onboarding" />;
 
   const accept = (r: Recommendation) => {
-    if (chosen) return; // ignore double taps
-    feedback(r.meal.id, 'accepted');
+    if (chosen || !ctx) return; // ignore double taps
     const t = now();
-    track('recommendation_accepted', { msSinceStart: t - startedAt, rank: shown.indexOf(r) });
+    if (planning) {
+      dispatch({ type: 'setPlan', plan: { mealId: r.meal.id, mealTime: slot.mealTime, date: slot.date, setting: ctx.setting } });
+      track('meal_planned', { mealTime: slot.mealTime });
+    } else {
+      feedback(r.meal.id, 'accepted', { setting: ctx.setting, mealTime: ctx.mealTime });
+      track('recommendation_accepted', { msSinceStart: t - startedAt, rank: shown.indexOf(r), wasNew: !!r.isNew });
+    }
     setChosen(r);
     setChosenAt(t);
   };
@@ -63,20 +80,41 @@ export default function Decide() {
   };
 
   if (chosen) {
+    const goHome = () => {
+      if (now() - chosenAt > DOUBLE_TAP_MS) router.back();
+    };
     return (
       <Screen
         footer={
-          <Button
-            label="Done"
-            // The Done button appears where "I'll have this" was; ignore the second half of a double tap.
-            onPress={() => {
-              if (now() - chosenAt > DOUBLE_TAP_MS) router.back();
-            }}
-          />
+          <>
+            {/* "Done" appears where "I'll have this" was; ignore the second half of a double tap. */}
+            <Button label="Done" onPress={goHome} />
+            {!planning ? (
+              <Button
+                label={`Plan my ${nextMealSlot(clock.now()).mealTime} too`}
+                variant="secondary"
+                hint="Deciding ahead makes it easier to follow through"
+                onPress={() => {
+                  if (now() - chosenAt > DOUBLE_TAP_MS) router.replace('/decide?plan=1');
+                }}
+              />
+            ) : null}
+          </>
         }
       >
-        <Title>Enjoy your {chosen.meal.name.toLowerCase()}.</Title>
-        <Body muted>Next time you open EatOS, it’ll ask how it was and use your answer to improve suggestions.</Body>
+        {planning ? (
+          <>
+            <Title>
+              {cap(slot.mealTime)} is planned: {chosen.meal.name.toLowerCase()}.
+            </Title>
+            <Body muted>When it’s {slot.mealTime} time, open EatOS and tap “Having it”. No need to decide again.</Body>
+          </>
+        ) : (
+          <>
+            <Title>Enjoy your {chosen.meal.name.toLowerCase()}.</Title>
+            <Body muted>Next time you open EatOS, it’ll ask how it was and use your answer to improve suggestions.</Body>
+          </>
+        )}
         <Card>
           <Heading>How to do it</Heading>
           <Body>{chosen.meal.howTo}</Body>
@@ -109,7 +147,7 @@ export default function Decide() {
     <Screen
       footer={
         <>
-          <Button label="I’ll have this" onPress={() => accept(primary)} />
+          <Button label={planning ? `Plan this for ${slot.mealTime}` : 'I’ll have this'} onPress={() => accept(primary)} />
           <View style={{ flexDirection: 'row', gap: space.sm }}>
             <View style={{ flex: 1 }}>
               <Button label="Something else" variant="secondary" onPress={swap} />
@@ -137,7 +175,7 @@ export default function Decide() {
         />
       </View>
 
-      <Small>Your best option right now</Small>
+      <Small>{planning ? `Planning your ${slot.mealTime}` : 'Your best option right now'}</Small>
       <Title>{primary.meal.name}</Title>
       <Body muted>{primary.meal.summary}</Body>
 
@@ -198,6 +236,10 @@ export default function Decide() {
 
 const DOUBLE_TAP_MS = 700;
 
+function cap(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function now() {
-  return Date.now();
+  return clock.now().getTime();
 }

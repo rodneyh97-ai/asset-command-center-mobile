@@ -1,5 +1,15 @@
 import type { FeedbackEvent, Profile } from '../../engine';
-import { initialState, parseStored, pendingRating, quickPicksFor, recentMealIds, reducer, weeklyReflection } from '../state';
+import {
+  initialState,
+  nextMealSlot,
+  parseStored,
+  pendingRating,
+  planStatus,
+  quickPicksFor,
+  recentMealIds,
+  reducer,
+  weeklyReflection,
+} from '../state';
 
 const NOW = new Date('2026-10-15T18:00:00Z');
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3600_000).toISOString();
@@ -105,6 +115,37 @@ describe('quick picks', () => {
     const p = { ...profile, allergens: [] };
     expect(quickPicksFor(p, h, 'restaurant').map((q) => q.meal.id)).toEqual(['burrito-bowl']);
     expect(quickPicksFor(p, h, 'home').map((q) => q.meal.id)).toEqual(['sheet-pan-chicken']);
+  });
+});
+
+describe('meal planning', () => {
+  const at = (hhmm: string, day = 15) => new Date(`2026-10-${day}T${hhmm}:00`);
+
+  it.each([
+    ['03:00', 'breakfast', '2026-10-15'],
+    ['08:00', 'lunch', '2026-10-15'],
+    ['13:00', 'dinner', '2026-10-15'],
+    ['18:00', 'breakfast', '2026-10-16'],
+    ['23:30', 'breakfast', '2026-10-16'],
+  ])('at %s the next meal to plan is %s on %s', (hhmm, mealTime, date) => {
+    expect(nextMealSlot(at(hhmm))).toEqual({ mealTime, date });
+  });
+
+  it('plan is upcoming, then due at meal time, then quietly expires', () => {
+    const plan = { mealId: 'burrito-bowl', mealTime: 'dinner' as const, date: '2026-10-15', setting: 'takeout' as const };
+    expect(planStatus(plan, at('13:00'))).toBe('upcoming');
+    expect(planStatus(plan, at('18:30'))).toBe('due');
+    expect(planStatus(plan, at('01:00', 16))).toBe('due'); // late dinner still counts
+    expect(planStatus(plan, at('04:00', 16))).toBe('expired');
+  });
+
+  it('plans survive a restart and junk plans are dropped', () => {
+    const plan = { mealId: 'burrito-bowl', mealTime: 'dinner', date: '2026-10-15', setting: 'takeout' };
+    const good = parseStored(JSON.stringify({ ...initialState, plan }));
+    expect(good.plan).toEqual(plan);
+    for (const bad of [{ ...plan, mealId: 'nope' }, { ...plan, mealTime: 'snack' }, { ...plan, date: 'tomorrow' }, 'x']) {
+      expect(parseStored(JSON.stringify({ ...initialState, plan: bad })).plan).toBeNull();
+    }
   });
 });
 

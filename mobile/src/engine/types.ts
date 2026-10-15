@@ -120,6 +120,9 @@ export interface FeedbackEvent {
   mealId: string;
   kind: FeedbackKind;
   at: string; // ISO timestamp
+  /** Where/when it happened (recorded on accepts) so EatOS can learn habits. */
+  setting?: Setting;
+  mealTime?: MealTime;
 }
 
 export interface ScoredReason {
@@ -130,6 +133,8 @@ export interface ScoredReason {
 export interface Recommendation {
   meal: MealIdea;
   score: number;
+  /** True when this is an exploration pick: something the user hasn't tried yet. */
+  isNew?: boolean;
   reasons: string[];
   /** Safety notes that must be shown with the recommendation. Never hidden. */
   cautions: string[];

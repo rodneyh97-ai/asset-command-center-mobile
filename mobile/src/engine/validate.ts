@@ -12,6 +12,7 @@ import type {
   Feeling,
   Goal,
   Hunger,
+  MealTime,
   Profile,
   Setting,
   Struggle,
@@ -30,6 +31,7 @@ export const VALID = {
   hunger: ['light', 'normal', 'very'] as Hunger[],
   time: [5, 15, 30, 60] as TimeAvailable[],
   feeling: ['fine', 'tired', 'stressed', 'comfort', 'energized'] as Feeling[],
+  mealTime: ['breakfast', 'lunch', 'dinner', 'snack'] as MealTime[],
   feedback: ['accepted', 'saved', 'unsaved', 'disliked', 'swapped', 'loved', 'fine'] as FeedbackKind[],
 };
 
@@ -79,5 +81,8 @@ export function sanitizeFeedback(raw: unknown): FeedbackEvent | null {
   if (typeof raw.mealId !== 'string' || raw.mealId.length > 100) return null;
   if (!VALID.feedback.includes(raw.kind as FeedbackKind)) return null;
   if (typeof raw.at !== 'string' || Number.isNaN(Date.parse(raw.at))) return null;
-  return { mealId: raw.mealId, kind: raw.kind as FeedbackKind, at: raw.at };
+  const out: FeedbackEvent = { mealId: raw.mealId, kind: raw.kind as FeedbackKind, at: raw.at };
+  if (VALID.setting.includes(raw.setting as Setting)) out.setting = raw.setting as Setting;
+  if (VALID.mealTime.includes(raw.mealTime as MealTime)) out.mealTime = raw.mealTime as MealTime;
+  return out;
 }

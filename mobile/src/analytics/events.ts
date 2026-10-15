@@ -17,6 +17,10 @@ export type AnalyticsName =
   | 'repeat_meal'
   | 'repeat_undone'
   | 'meal_rated'
+  | 'meal_planned'
+  | 'plan_followed'
+  | 'plan_changed'
+  | 'plan_missed'
   | 'goal_changed';
 
 export interface AnalyticsEvent {
@@ -62,6 +66,8 @@ export function summarize(events: AnalyticsEvent[], now: Date) {
     emptyResults: by('recommendation_empty').length,
     lovedRatings: ratings.filter((e) => e.props?.rating === 'loved').length,
     negativeRatings: ratings.filter((e) => e.props?.rating === 'disliked').length,
+    plansMade: by('meal_planned').length,
+    plansFollowed: by('plan_followed').length,
   };
 }
 

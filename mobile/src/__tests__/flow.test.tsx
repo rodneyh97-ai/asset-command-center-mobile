@@ -7,6 +7,7 @@ import Decide from '../app/decide';
 import Home from '../app/index';
 import Onboarding from '../app/onboarding';
 import Settings from '../app/settings';
+import { clock } from '../clock';
 import { CATALOG } from '../engine';
 
 const routes = { _layout: RootLayout, index: Home, onboarding: Onboarding, decide: Decide, settings: Settings };
@@ -211,3 +212,65 @@ describe('ATTACK: UI-level abuse', () => {
     });
   });
 });
+
+describe('planning the next meal (implementation intentions)', () => {
+  afterEach(() => clock.set(null));
+  const fakeNow = (iso: string) => clock.set(new Date(iso));
+
+  it('plan lunch in the morning, then one tap at lunch time', async () => {
+    fakeNow('2026-10-15T09:00:00');
+    await onboard();
+    fireEvent.press(screen.getByLabelText('Plan my lunch'));
+    await screen.findByText('Planning your lunch');
+    fireEvent.press(screen.getByLabelText('Plan this for lunch'));
+    await screen.findByText(/^Lunch is planned:/);
+    const planned = (await AsyncStorage.getItem('eatos.state.v1'))!;
+    const mealId = JSON.parse(planned).plan.mealId;
+    expect(mealId).toBeTruthy();
+
+    // Later, at lunch time, the app opens to the plan.
+    screen.unmount();
+    fakeNow('2026-10-15T12:15:00');
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('Your plan for lunch');
+    fireEvent.press(screen.getByLabelText('Having it'));
+    await screen.findByText(/as planned\. Enjoy\./);
+    const after = JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!);
+    expect(after.plan).toBeNull();
+    expect(after.history.at(-1)).toMatchObject({ mealId, kind: 'accepted', mealTime: 'lunch' });
+  });
+
+  it('a missed plan disappears quietly the next day', async () => {
+    fakeNow('2026-10-15T09:00:00');
+    await onboard();
+    fireEvent.press(screen.getByLabelText('Plan my lunch'));
+    fireEvent.press(await screen.findByLabelText('Plan this for lunch'));
+    await screen.findByText(/^Lunch is planned:/);
+    screen.unmount();
+    fakeNow('2026-10-16T19:00:00');
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('What should I eat?');
+    expect(screen.queryByText(/Your plan for/)).toBeNull();
+    await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!).plan).toBeNull());
+  });
+
+  it('a plan that no longer fits a new allergy is not offered as "Having it"', async () => {
+    fakeNow('2026-10-15T12:30:00');
+    await AsyncStorage.setItem(
+      'eatos.state.v1',
+      JSON.stringify({
+        version: 1,
+        profile: { goal: 'eat_better', struggles: [], cuisines: [], allergens: ['dairy'], diets: [], budget: 2, considerations: [], createdAt: '' },
+        history: [],
+        lastContext: null,
+        analytics: [],
+        plan: { mealId: 'grilled-cheese-soup', mealTime: 'lunch', date: '2026-10-15', setting: 'home' },
+      }),
+    );
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('Your plan for lunch');
+    expect(screen.queryByLabelText('Having it')).toBeNull();
+    expect(screen.getByText(/no longer fits/)).toBeTruthy();
+  });
+});
+

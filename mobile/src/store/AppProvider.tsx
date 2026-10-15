@@ -1,9 +1,10 @@
+import { clock } from '../clock';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 
 import { CRASH_KEY } from '../analytics/crash';
 import type { AnalyticsEvent, AnalyticsName } from '../analytics/events';
-import type { FeedbackKind } from '../engine';
+import type { FeedbackKind, MealTime, Setting } from '../engine';
 import { initialState, parseStored, reducer, type Action, type AppState } from './state';
 
 const STORAGE_KEY = 'eatos.state.v1';
@@ -14,7 +15,7 @@ interface Store {
   ready: boolean;
   dispatch: (a: Action) => void;
   track: (name: AnalyticsName, props?: AnalyticsEvent['props']) => void;
-  feedback: (mealId: string, kind: FeedbackKind) => void;
+  feedback: (mealId: string, kind: FeedbackKind, where?: { setting: Setting; mealTime: MealTime }) => void;
   deleteAllData: () => Promise<void>;
 }
 
@@ -47,7 +48,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } finally {
         if (!cancelled) {
           setReady(true);
-          dispatch({ type: 'track', event: { name: 'app_open', at: new Date().toISOString() } });
+          dispatch({ type: 'track', event: { name: 'app_open', at: clock.now().toISOString() } });
         }
       }
     })();
@@ -64,12 +65,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   const track = useCallback((name: AnalyticsName, props?: AnalyticsEvent['props']) => {
-    dispatch({ type: 'track', event: { name, at: new Date().toISOString(), props } });
+    dispatch({ type: 'track', event: { name, at: clock.now().toISOString(), props } });
   }, []);
 
-  const feedback = useCallback((mealId: string, kind: FeedbackKind) => {
-    dispatch({ type: 'feedback', mealId, kind, at: new Date().toISOString() });
-  }, []);
+  const feedback = useCallback(
+    (mealId: string, kind: FeedbackKind, where?: { setting: Setting; mealTime: MealTime }) => {
+      dispatch({ type: 'feedback', mealId, kind, at: clock.now().toISOString(), ...where });
+    },
+    [],
+  );
 
   const deleteAllData = useCallback(async () => {
     await AsyncStorage.multiRemove([STORAGE_KEY, BACKUP_KEY, CRASH_KEY]);

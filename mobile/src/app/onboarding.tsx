@@ -1,3 +1,4 @@
+import { clock } from '../clock';
 import { Redirect, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
@@ -37,7 +38,7 @@ export default function Onboarding() {
         diets,
         budget: budget ?? 2,
         considerations: considerations.filter((c) => c !== 'none'),
-        createdAt: new Date().toISOString(),
+        createdAt: clock.now().toISOString(),
       },
     });
     track('onboarding_completed');
