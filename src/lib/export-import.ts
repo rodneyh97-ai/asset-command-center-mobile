@@ -89,7 +89,7 @@ export async function importBackup(data: BackupData): Promise<{ imported: number
     if (!items || items.length === 0) continue;
     const tx = db.transaction(name, 'readwrite');
     for (const item of items) {
-      const sanitized = truncateStrings(item as Record<string, unknown>);
+      const sanitized = truncateStrings(item as unknown as Record<string, unknown>);
       await tx.store.put(sanitized as any);
       count++;
     }
@@ -124,8 +124,9 @@ function sanitizeArray(arr: unknown): unknown[] {
   return arr.slice(0, MAX_ARRAY_LENGTH).filter((item) => {
     if (!isPlainObject(item)) return false;
     // Block prototype pollution keys
-    if ('__proto__' in item || 'constructor' in item || 'prototype' in item) return false;
-    // Require 'id' field as string
+    if (Object.prototype.hasOwnProperty.call(item, '__proto__') ||
+        Object.prototype.hasOwnProperty.call(item, 'constructor') ||
+        Object.prototype.hasOwnProperty.call(item, 'prototype')) return false;
     if (typeof item.id !== 'string' || item.id.length === 0 || item.id.length > 100) return false;
     return true;
   });
