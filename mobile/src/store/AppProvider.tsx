@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import { clock } from '../clock';
 import { CRASH_KEY } from '../analytics/crash';
 import type { AnalyticsEvent, AnalyticsName } from '../analytics/events';
-import type { FeedbackKind, MealTime, Setting } from '../engine';
+import type { FeedbackKind, Feeling, MealTime, Setting } from '../engine';
 import { startCrashReporting } from '../analytics/sentry';
 import { syncReminders } from '../notifications/reminders';
 import { initialState, parseStored, reducer, type Action, type AppState } from './state';
@@ -17,7 +17,7 @@ interface Store {
   ready: boolean;
   dispatch: (a: Action) => void;
   track: (name: AnalyticsName, props?: AnalyticsEvent['props']) => void;
-  feedback: (mealId: string, kind: FeedbackKind, where?: { setting: Setting; mealTime: MealTime }) => void;
+  feedback: (mealId: string, kind: FeedbackKind, where?: { setting: Setting; mealTime: MealTime; feeling?: Feeling }) => void;
   deleteAllData: () => Promise<void>;
 }
 
@@ -78,7 +78,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const feedback = useCallback(
-    (mealId: string, kind: FeedbackKind, where?: { setting: Setting; mealTime: MealTime }) => {
+    (mealId: string, kind: FeedbackKind, where?: { setting: Setting; mealTime: MealTime; feeling?: Feeling }) => {
       dispatch({ type: 'feedback', mealId, kind, at: clock.now().toISOString(), ...where });
     },
     [],

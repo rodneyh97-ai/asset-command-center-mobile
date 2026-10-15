@@ -55,7 +55,7 @@ describe('ATTACK: bypass allergy filtering', () => {
       const ctx: Context = {
         setting: pick(['home', 'takeout', 'restaurant', 'work', 'on_the_go'] as const),
         hunger: pick(['light', 'normal', 'very'] as const),
-        time: pick([5, 15, 30, 60] as const),
+        time: pick([10, 20, 60] as const),
         budget: pick([1, 2, 3, 4] as const),
         feeling: pick(['fine', 'tired', 'stressed', 'comfort', 'energized'] as const),
         mealTime: pick(['breakfast', 'lunch', 'dinner', 'snack'] as const),
@@ -173,7 +173,7 @@ describe('ATTACK: corrupt or hostile stored data', () => {
     if (s.profile) {
       for (const a of s.profile.allergens) expect(ALL_ALLERGENS).toContain(a);
       expect([1, 2, 3, 4]).toContain(s.profile.budget);
-      const ctx = { ...(s.lastContext ?? { setting: 'home', hunger: 'normal', time: 15, budget: 2, feeling: 'fine' }), mealTime: 'lunch' as const };
+      const ctx = { ...(s.lastContext ?? { setting: 'home', hunger: 'normal', time: 20, budget: 2, feeling: 'fine' }), mealTime: 'lunch' as const };
       expect(() => recommend(s.profile!, ctx, { history: s.history, now: NOW })).not.toThrow();
       for (const m of CATALOG) expect(() => swapsFor(m, s.profile!)).not.toThrow();
     }

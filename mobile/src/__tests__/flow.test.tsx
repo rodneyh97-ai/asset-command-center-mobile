@@ -193,7 +193,7 @@ describe('ATTACK: UI-level abuse', () => {
         version: 1,
         profile: { goal: 'eat_better', struggles: [], cuisines: [], allergens: ['dairy'], diets: [], budget: 2, considerations: [], createdAt: '' },
         history: [{ mealId: 'greek-yogurt-bowl', kind: 'saved', at: new Date().toISOString() }],
-        lastContext: { setting: 'home', hunger: 'normal', time: 15, budget: 2, feeling: 'fine' },
+        lastContext: { setting: 'home', hunger: 'normal', time: 20, budget: 2, feeling: 'fine' },
         analytics: [],
       }),
     );

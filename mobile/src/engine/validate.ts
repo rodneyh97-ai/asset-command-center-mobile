@@ -29,7 +29,7 @@ export const VALID = {
   consideration: ['medical', 'ed_sensitive', 'household'] as Consideration[],
   setting: ['home', 'takeout', 'restaurant', 'work', 'on_the_go'] as Setting[],
   hunger: ['light', 'normal', 'very'] as Hunger[],
-  time: [5, 15, 30, 60] as TimeAvailable[],
+  time: [10, 20, 60] as TimeAvailable[],
   feeling: ['fine', 'tired', 'stressed', 'comfort', 'energized'] as Feeling[],
   mealTime: ['breakfast', 'lunch', 'dinner', 'snack'] as MealTime[],
   feedback: ['accepted', 'saved', 'unsaved', 'disliked', 'swapped', 'loved', 'fine'] as FeedbackKind[],
@@ -65,12 +65,20 @@ export function sanitizeProfile(raw: unknown): Profile | null {
   };
 }
 
+/** Earlier versions stored 5/15/30/60-minute options; map them to today's buckets. */
+function migrateTime(v: unknown): unknown {
+  if (v === 5) return 10;
+  if (v === 15) return 20;
+  if (v === 30) return 60;
+  return v;
+}
+
 export function sanitizeContext(raw: unknown): Omit<Context, 'mealTime'> | null {
   if (!isObj(raw)) return null;
   return {
     setting: oneOf(VALID.setting, raw.setting, 'home'),
     hunger: oneOf(VALID.hunger, raw.hunger, 'normal'),
-    time: oneOf(VALID.time, raw.time, 15),
+    time: oneOf(VALID.time, migrateTime(raw.time), 20),
     budget: oneOf(VALID.budget, raw.budget, 2),
     feeling: oneOf(VALID.feeling, raw.feeling, 'fine'),
   };
@@ -84,5 +92,6 @@ export function sanitizeFeedback(raw: unknown): FeedbackEvent | null {
   const out: FeedbackEvent = { mealId: raw.mealId, kind: raw.kind as FeedbackKind, at: raw.at };
   if (VALID.setting.includes(raw.setting as Setting)) out.setting = raw.setting as Setting;
   if (VALID.mealTime.includes(raw.mealTime as MealTime)) out.mealTime = raw.mealTime as MealTime;
+  if (VALID.feeling.includes(raw.feeling as Feeling)) out.feeling = raw.feeling as Feeling;
   return out;
 }

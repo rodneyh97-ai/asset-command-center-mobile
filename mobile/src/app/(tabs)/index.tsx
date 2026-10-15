@@ -2,21 +2,47 @@ import { Redirect, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { clock } from '../clock';
-import { CATALOG, mealTimeFor, safetyCheck, type MealIdea } from '../engine';
-import { useStore } from '../store/AppProvider';
-import { checkinDue, defaultContext, nextMealSlot, pendingRating, planStatus, quickPicksFor, weeklyReflection, type SavedContext } from '../store/state';
-import { Body, Button, Card, Cautions, ChipGroup, Heading, Screen, Small, TextAction, Title } from '../ui/components';
-import { BUDGETS, BUDGET_SHORT, FEELINGS, HUNGER, SETTINGS, TIMES } from '../ui/labels';
-import { WeeklyCheckIn } from '../ui/CheckIn';
-import { space, useColors } from '../ui/theme';
+import { clock } from '../../clock';
+import { CATALOG, mealTimeFor, safetyCheck, type MealIdea } from '../../engine';
+import { useStore } from '../../store/AppProvider';
+import {
+  checkinDue,
+  defaultContext,
+  nextMealSlot,
+  pendingRating,
+  planStatus,
+  quickPicksFor,
+  weeklyReflection,
+  type SavedContext,
+} from '../../store/state';
+import { WeeklyCheckIn } from '../../ui/CheckIn';
+import {
+  Body,
+  Button,
+  Card,
+  Cautions,
+  ChipGroup,
+  EmojiTile,
+  Heading,
+  Icon,
+  IconTile,
+  Logo,
+  MealArt,
+  Row,
+  Screen,
+  SectionLabel,
+  Small,
+  TextAction,
+  Title,
+} from '../../ui/components';
+import { FEELINGS, HUNGER, SETTINGS, TIMES } from '../../ui/labels';
+import { space, useColors } from '../../ui/theme';
 
-const GREETING = { breakfast: 'Good morning.', lunch: 'Lunchtime.', dinner: 'Dinnertime.', snack: 'Hungry?' };
+const DATE_FMT: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
 
 export default function Home() {
   const { state, ready, dispatch, track, feedback } = useStore();
   const c = useColors();
-  const [editing, setEditing] = useState(false);
   // 'auto' = show when due; 'thanks' = keep visible for its closing message; 'closed' = hidden this visit.
   const [checkinPhase, setCheckinPhase] = useState<'auto' | 'thanks' | 'closed'>('auto');
   const [confirmation, setConfirmation] = useState<{ text: string; mealId: string } | null>(null);
@@ -44,17 +70,15 @@ export default function Home() {
   if (!ready) return null;
   if (!profile) return <Redirect href="/onboarding" />;
 
-  const ctx: SavedContext = state.lastContext ?? defaultContext(profile);
-
+  // Budget always follows the profile; everything else remembers the last choice.
+  const ctx: SavedContext = { ...(state.lastContext ?? defaultContext(profile)), budget: profile.budget };
   const setCtx = (patch: Partial<SavedContext>) => dispatch({ type: 'setLastContext', context: { ...ctx, ...patch } });
+
   const pending = pendingRating(state.history, now);
   const pendingMeal = pending ? CATALOG.find((m) => m.id === pending.mealId) : undefined;
   const week = weeklyReflection(state.history, now);
-  const label = <T extends string | number>(opts: { value: T; label: string }[], v: T) =>
-    opts.find((o) => o.value === v)?.label ?? '';
 
   const decide = () => {
-    setEditing(false); // come back to a compact home screen
     dispatch({ type: 'setLastContext', context: ctx });
     track('decide_started', { setting: ctx.setting });
     router.push('/decide');
@@ -62,20 +86,19 @@ export default function Home() {
 
   const repeat = (m: MealIdea) => {
     if (confirmation) return; // one repeat per visit; prevents double-tap duplicates
-    feedback(m.id, 'accepted', { setting: ctx.setting, mealTime: mealTimeFor(clock.now()) });
+    feedback(m.id, 'accepted', { setting: ctx.setting, mealTime: mealTimeFor(clock.now()), feeling: ctx.feeling });
     track('repeat_meal');
     setConfirmation({ text: `${m.name} it is. Enjoy.`, mealId: m.id });
   };
 
   const plan = state.plan && !planExpired ? state.plan : null;
-
   const planMeal = plan ? CATALOG.find((m) => m.id === plan.mealId) : undefined;
   const planSafety = plan && planMeal ? safetyCheck(planMeal, profile, plan.setting) : null;
   const planDue = plan ? planStatus(plan, now) === 'due' : false;
 
   const followPlan = () => {
     if (!plan || !planMeal) return;
-    feedback(plan.mealId, 'accepted', { setting: plan.setting, mealTime: plan.mealTime });
+    feedback(plan.mealId, 'accepted', { setting: plan.setting, mealTime: plan.mealTime, feeling: ctx.feeling });
     track('plan_followed');
     dispatch({ type: 'clearPlan' });
     setConfirmation({ text: `${planMeal.name}, as planned. Enjoy.`, mealId: plan.mealId });
@@ -93,29 +116,50 @@ export default function Home() {
   };
 
   return (
-    <Screen>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Small>{GREETING[mealTimeFor(now)]}</Small>
-        <TextAction label="Preferences" onPress={() => router.push('/settings')} />
-      </View>
+    <Screen edges={['top', 'left', 'right']}>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Logo size={26} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Profile"
+          onPress={() => router.push('/profile')}
+          style={({ pressed }) => ({
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: c.selected,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <Icon name="person" size={22} color={c.primary} />
+        </Pressable>
+      </Row>
 
-      <Title>What should I eat?</Title>
+      <View style={{ gap: 2 }}>
+        <Small>{now.toLocaleDateString('en-US', DATE_FMT)}</Small>
+        <Title>What should I eat?</Title>
+      </View>
 
       {plan && planMeal && planDue ? (
         <Card>
           <Small>Your plan for {plan.mealTime}</Small>
-          <Heading>{planMeal.name}</Heading>
+          <Row gap={space.md}>
+            <MealArt meal={planMeal} variant="small" />
+            <Heading style={{ flex: 1 }}>{planMeal.name}</Heading>
+          </Row>
           {planSafety?.ok ? (
             <>
               <Cautions items={planSafety.cautions} />
-              <View style={{ flexDirection: 'row', gap: space.sm }}>
+              <Row>
                 <View style={{ flex: 1 }}>
                   <Button label="Having it" onPress={followPlan} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Button label="Change" variant="secondary" onPress={changePlan} />
                 </View>
-              </View>
+              </Row>
             </>
           ) : (
             <>
@@ -127,22 +171,18 @@ export default function Home() {
       ) : null}
 
       {plan && planMeal && !planDue ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Small>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <Small style={{ flex: 1 }}>
             Planned for {plan.mealTime}: {planMeal.name}
           </Small>
-          <TextAction
-            label="Cancel"
-            a11yLabel={`Cancel plan for ${plan.mealTime}`}
-            onPress={() => dispatch({ type: 'clearPlan' })}
-          />
-        </View>
+          <TextAction label="Cancel" a11yLabel={`Cancel plan for ${plan.mealTime}`} onPress={() => dispatch({ type: 'clearPlan' })} />
+        </Row>
       ) : null}
 
       {pendingMeal ? (
         <Card>
           <Body>How was the {pendingMeal.name.toLowerCase()}?</Body>
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
+          <Row>
             <View style={{ flex: 1 }}>
               <Button label="Loved it" variant="secondary" onPress={() => rate('loved')} />
             </View>
@@ -152,50 +192,12 @@ export default function Home() {
             <View style={{ flex: 1 }}>
               <Button label="Not again" variant="secondary" onPress={() => rate('disliked')} />
             </View>
-          </View>
+          </Row>
         </Card>
       ) : null}
 
-      <ChipGroup label="Where are you eating?" options={SETTINGS} value={ctx.setting} onChange={(v) => setCtx({ setting: v })} />
-
-      {editing ? (
-        <>
-          <ChipGroup label="How hungry?" options={HUNGER} value={ctx.hunger} onChange={(v) => setCtx({ hunger: v })} />
-          <ChipGroup label="Time until you eat" options={TIMES} value={ctx.time} onChange={(v) => setCtx({ time: v })} />
-          <ChipGroup label="Budget" options={BUDGETS} value={ctx.budget} onChange={(v) => setCtx({ budget: v })} />
-          <ChipGroup label="How are you feeling?" options={FEELINGS} value={ctx.feeling} onChange={(v) => setCtx({ feeling: v })} />
-          <TextAction label="Done" a11yLabel="Done changing settings" onPress={() => setEditing(false)} />
-        </>
-      ) : (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Current settings: ${label(HUNGER, ctx.hunger)}, ${label(TIMES, ctx.time)}, budget ${BUDGET_SHORT[ctx.budget]}, feeling ${label(FEELINGS, ctx.feeling)}. Tap to change.`}
-          onPress={() => setEditing(true)}
-          style={{ minHeight: 44, justifyContent: 'center' }}
-        >
-          <Small>
-            {label(HUNGER, ctx.hunger)} · {label(TIMES, ctx.time)} · {BUDGET_SHORT[ctx.budget]} · {label(FEELINGS, ctx.feeling)}
-            {'  '}
-            <Small muted={false}>Change</Small>
-          </Small>
-        </Pressable>
-      )}
-
-      <Button big label="Help me decide" onPress={decide} hint="Shows one recommendation and two alternatives" />
-      {!plan ? (
-        <Button
-          label={`Plan my ${nextMealSlot(now).mealTime}`}
-          variant="ghost"
-          onPress={() => {
-            setEditing(false);
-            dispatch({ type: 'setLastContext', context: ctx });
-            router.push('/decide?plan=1');
-          }}
-        />
-      ) : null}
-
       {confirmation ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Row style={{ justifyContent: 'space-between' }}>
           <Body style={{ flex: 1 }}>{confirmation.text}</Body>
           <TextAction
             label="Undo"
@@ -206,7 +208,41 @@ export default function Home() {
               setConfirmation(null);
             }}
           />
-        </View>
+        </Row>
+      ) : null}
+
+      <View style={{ gap: space.sm }} accessibilityRole="radiogroup" accessibilityLabel="Where are you eating?">
+        <SectionLabel>Where are you eating?</SectionLabel>
+        <Row gap={space.xs}>
+          {SETTINGS.map((s) => (
+            <IconTile key={s.value} icon={s.icon} label={s.label} selected={ctx.setting === s.value} onPress={() => setCtx({ setting: s.value })} />
+          ))}
+        </Row>
+      </View>
+
+      <ChipGroup stretch label="How hungry are you?" options={HUNGER} value={ctx.hunger} onChange={(v) => setCtx({ hunger: v })} />
+      <ChipGroup stretch label="How much time do you have?" options={TIMES} value={ctx.time} onChange={(v) => setCtx({ time: v })} />
+
+      <View style={{ gap: space.sm }} accessibilityRole="radiogroup" accessibilityLabel="How are you feeling?">
+        <SectionLabel>How are you feeling?</SectionLabel>
+        <Row gap={space.sm}>
+          {FEELINGS.map((f) => (
+            <EmojiTile key={f.value} emoji={f.emoji} label={f.label} selected={ctx.feeling === f.value} onPress={() => setCtx({ feeling: f.value })} />
+          ))}
+        </Row>
+      </View>
+
+      <Button big label="Get my recommendation" iconRight="arrow-forward" onPress={decide} hint="Shows one recommendation and two alternatives" />
+      {!plan ? (
+        <Button
+          label={`Plan my ${nextMealSlot(now).mealTime}`}
+          variant="ghost"
+          icon="calendar-outline"
+          onPress={() => {
+            dispatch({ type: 'setLastContext', context: ctx });
+            router.push('/decide?plan=1');
+          }}
+        />
       ) : null}
 
       {quickPicks.length > 0 ? (
@@ -221,18 +257,24 @@ export default function Home() {
                 disabled={!!confirmation}
                 onPress={() => repeat(m)}
                 style={({ pressed }) => ({
-                  minHeight: 56,
-                  padding: space.md,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.md,
+                  minHeight: 64,
+                  padding: space.sm,
                   borderRadius: 14,
                   borderWidth: 1,
                   borderColor: c.border,
                   backgroundColor: c.surface,
                   opacity: pressed || confirmation ? 0.6 : 1,
-                  justifyContent: 'center',
                 })}
               >
-                <Body>{m.name}</Body>
-                <Small>{saved ? 'Saved' : 'Recent'} · tap to have it again</Small>
+                <MealArt meal={m} variant="small" />
+                <View style={{ flex: 1 }}>
+                  <Body>{m.name}</Body>
+                  <Small>{saved ? 'Saved' : 'Recent'} · tap to have it again</Small>
+                </View>
+                <Icon name="repeat" size={18} color={c.primary} />
               </Pressable>
               <Cautions items={cautions} />
             </View>
@@ -240,9 +282,7 @@ export default function Home() {
         </View>
       ) : null}
 
-      {checkinShown ? (
-        <WeeklyCheckIn onDone={() => setCheckinPhase('thanks')} onClose={() => setCheckinPhase('closed')} />
-      ) : null}
+      {checkinShown ? <WeeklyCheckIn onDone={() => setCheckinPhase('thanks')} onClose={() => setCheckinPhase('closed')} /> : null}
 
       {week.decisions > 0 ? (
         <Small>

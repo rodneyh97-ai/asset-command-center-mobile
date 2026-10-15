@@ -31,7 +31,7 @@ const profile = (over: Partial<Profile> = {}): Profile => ({
 const ctx = (over: Partial<Context> = {}): Context => ({
   setting: 'home',
   hunger: 'normal',
-  time: 30,
+  time: 20,
   budget: 2,
   feeling: 'fine',
   mealTime: 'dinner',
@@ -90,7 +90,7 @@ describe('catalog integrity', () => {
 describe('allergy safety (hard constraint)', () => {
   const settings: Setting[] = ['home', 'takeout', 'restaurant', 'work', 'on_the_go'];
   const mealTimes: MealTime[] = ['breakfast', 'lunch', 'dinner', 'snack'];
-  const times: TimeAvailable[] = [5, 15, 30, 60];
+  const times: TimeAvailable[] = [10, 20, 60];
   const budgets: BudgetTier[] = [1, 2, 3, 4];
 
   it.each(ALL_ALLERGENS)('never recommends a meal that contains %s, in any situation', (allergen) => {
@@ -192,7 +192,7 @@ describe('situation fit', () => {
   });
 
   it('at home, never exceeds the time available', () => {
-    for (const time of [5, 15, 30] as TimeAvailable[]) {
+    for (const time of [10, 20] as TimeAvailable[]) {
       for (const r of allResults(profile(), ctx({ time }))) {
         expect(r.meal.prepMinutes).toBeLessThanOrEqual(time);
       }

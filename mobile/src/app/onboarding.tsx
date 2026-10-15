@@ -1,146 +1,309 @@
 import { Redirect, router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { clock } from '../clock';
-import type { Allergen, BudgetTier, Consideration, Cuisine, Diet, Goal, Struggle } from '../engine';
+import type { Allergen, BudgetTier, Consideration, Cuisine, Diet, Goal, Struggle, TimeAvailable } from '../engine';
 import { useStore } from '../store/AppProvider';
-import { Body, Button, Caution, ChipGroup, Heading, MultiChipGroup, Screen, Small, Title } from '../ui/components';
-import { ALLERGENS, BUDGETS, CONSIDERATIONS, CUISINES, DIETS, GOALS, STRUGGLES } from '../ui/labels';
-import { space } from '../ui/theme';
+import { defaultContext } from '../store/state';
+import {
+  Body,
+  Button,
+  Caution,
+  CheckRow,
+  ChipGroup,
+  Icon,
+  ImageChoiceTile,
+  Logo,
+  MealArt,
+  MultiChipGroup,
+  OptionCard,
+  ProgressHeader,
+  RadioRow,
+  Row,
+  Screen,
+  Small,
+  Title,
+  ToggleRow,
+  toggleIn,
+} from '../ui/components';
+import { ALLERGENS, BUDGETS, CONSIDERATIONS, CUISINES, DIETS, GOALS, STRUGGLES, TIMES } from '../ui/labels';
+import { mealColors } from '../ui/mealArt';
+import { space, type, useColors } from '../ui/theme';
 
-const STEPS = 6;
+const QUESTIONS = 6;
+type Step = 'welcome' | 1 | 2 | 3 | 4 | 5 | 6 | 'done';
 
 export default function Onboarding() {
   const { state, ready, dispatch, track } = useStore();
-  const [step, setStep] = useState(0);
+  const c = useColors();
+  const [step, setStep] = useState<Step>('welcome');
   const [goal, setGoal] = useState<Goal | null>(null);
-  const [struggles, setStruggles] = useState<Struggle[]>([]);
   const [cuisines, setCuisines] = useState<Cuisine[]>([]);
   const [allergens, setAllergens] = useState<Allergen[]>([]);
   const [diets, setDiets] = useState<Diet[]>([]);
   const [budget, setBudget] = useState<BudgetTier | null>(null);
+  const [time, setTime] = useState<TimeAvailable>(20);
+  const [struggles, setStruggles] = useState<Struggle[]>([]);
   const [considerations, setConsiderations] = useState<Consideration[]>([]);
 
-  const alreadyOnboarded = ready && !!state.profile;
   useEffect(() => {
     if (ready && !state.profile) track('onboarding_started');
   }, [ready, state.profile, track]);
 
-  const finish = () => {
-    dispatch({
-      type: 'completeOnboarding',
-      profile: {
-        goal: goal ?? 'eat_better',
-        struggles,
-        cuisines,
-        allergens,
-        diets,
-        budget: budget ?? 2,
-        considerations: considerations.filter((c) => c !== 'none'),
-        createdAt: clock.now().toISOString(),
-      },
-    });
-    track('onboarding_completed');
-    router.replace('/');
-  };
-
-  const next = () => (step === STEPS - 1 ? finish() : setStep(step + 1));
-  const canContinue = [goal !== null, true, true, true, budget !== null, true][step];
-  const nextLabel =
-    step === 1 && struggles.length === 0
-      ? 'Skip'
-      : step === 2 && cuisines.length === 0
-        ? 'Skip'
-        : step === 3 && allergens.length + diets.length === 0
-          ? 'None — continue'
-          : step === STEPS - 1
-            ? 'Show me what to eat'
-            : 'Continue';
-
   if (!ready) return null;
   // A link to /onboarding must not let anyone overwrite an existing profile (and its allergies).
-  if (alreadyOnboarded && step === 0) return <Redirect href="/" />;
+  if (state.profile && step === 'welcome') return <Redirect href="/" />;
+
+  const finish = () => {
+    const profile = {
+      goal: goal ?? 'eat_better',
+      struggles,
+      cuisines,
+      allergens,
+      diets,
+      budget: budget ?? 2,
+      considerations: considerations.filter((x) => x !== 'none'),
+      createdAt: clock.now().toISOString(),
+    };
+    dispatch({ type: 'completeOnboarding', profile });
+    dispatch({ type: 'setLastContext', context: { ...defaultContext(profile), time } });
+    track('onboarding_completed');
+    setStep('done');
+  };
+
+  // ---------- 1. Splash ----------
+  if (step === 'welcome') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.hero }}>
+        <Leaves />
+        <View style={styles.splash}>
+          <View style={{ gap: space.xl }}>
+            <Logo size={64} inverse />
+            <Text style={[styles.tagline, { color: c.heroText }]}>
+              Less thinking.{'\n'}Better eating.{'\n'}Real life.
+            </Text>
+          </View>
+          <View style={{ gap: space.lg }}>
+            <Button label="Get Started" variant="accent" big iconRight="arrow-forward" onPress={() => setStep(1)} />
+            <Text style={[type.small, { color: c.heroMuted, textAlign: 'center' }]}>
+              A personal food operating system{'\n'}for real life.
+            </Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ---------- 6. Finish ----------
+  if (step === 'done') {
+    return (
+      <Screen footer={<Button label="Go to Home" big iconRight="arrow-forward" onPress={() => router.replace('/')} />}>
+        <Confetti />
+        <View style={{ alignItems: 'center', gap: space.sm }}>
+          <Icon name="star" size={36} color={c.brandGreen} />
+          <Title style={{ textAlign: 'center' }}>You’re all set!</Title>
+          <Body muted style={{ textAlign: 'center' }}>
+            EatOS will now learn and get better{'\n'}the more you use it.
+          </Body>
+        </View>
+        <MealArt meal={{ name: 'Grilled chicken bowl', cuisine: 'mediterranean' }} variant="hero" />
+        <View style={[styles.checklist, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <CheckRow text="Your goal is saved" />
+          <CheckRow text="Your preferences are set" />
+          <CheckRow text={allergens.length + diets.length > 0 ? 'Restrictions are active' : 'No restrictions to apply'} />
+          <CheckRow text="Personalized recommendations are ready" />
+        </View>
+      </Screen>
+    );
+  }
+
+  const n = step;
+  const back = () => setStep(n === 1 ? 'welcome' : ((n - 1) as Step));
+  const next = () => (n === QUESTIONS ? finish() : setStep((n + 1) as Step));
+  const canContinue = n === 1 ? goal !== null : n === 4 ? budget !== null : true;
+  const nextLabel =
+    n === 2 && cuisines.length === 0
+      ? 'Skip'
+      : n === 3 && allergens.length + diets.length === 0
+        ? 'None — Next'
+        : n === 5 && struggles.length === 0
+          ? 'Skip'
+          : n === QUESTIONS
+            ? 'Finish'
+            : 'Next';
 
   return (
-    <Screen
-      footer={
-        <>
-          <Button label={nextLabel} onPress={next} disabled={!canContinue} />
-          {step > 0 ? <Button label="Back" variant="ghost" onPress={() => setStep(step - 1)} /> : null}
-        </>
-      }
-    >
-      <Small>
-        Step {step + 1} of {STEPS}
-      </Small>
+    <Screen footer={<Button label={nextLabel} big iconRight="arrow-forward" onPress={next} disabled={!canContinue} />}>
+      <ProgressHeader step={n} total={QUESTIONS} onBack={back} />
 
-      {step === 0 && (
+      {n === 1 && (
         <>
-          <Title>What do you want eating to do for you?</Title>
-          <Body muted>Pick the one that matters most right now. It stays put until you decide to change it.</Body>
-          <ChipGroup options={GOALS} value={goal as Goal} onChange={setGoal} />
+          <Header title="What’s your main goal?" subtitle="This helps EatOS give you better recommendations. It stays put until you change it." />
+          {GOALS.map((g) => (
+            <OptionCard key={g.value} icon={g.icon} title={g.label} subtitle={g.subtitle} selected={goal === g.value} onPress={() => setGoal(g.value)} />
+          ))}
         </>
       )}
 
-      {step === 1 && (
+      {n === 2 && (
         <>
-          <Title>What usually makes eating the way you want hard?</Title>
-          <Body muted>Pick any that sound familiar. This is where EatOS should help most.</Body>
-          <MultiChipGroup options={STRUGGLES} value={struggles} onChange={setStruggles} />
+          <Header title="What foods do you enjoy?" subtitle="Select as many as you like." />
+          <View style={{ gap: space.md }}>
+            {chunk(CUISINES, 3).map((row, i) => (
+              <Row key={i} gap={space.md} style={{ alignItems: 'flex-start' }}>
+                {row.map((o) => (
+                  <ImageChoiceTile
+                    key={o.value}
+                    emoji={o.emoji}
+                    colors={mealColors({ cuisine: o.value })}
+                    label={o.label}
+                    selected={cuisines.includes(o.value)}
+                    onPress={() => setCuisines(toggleIn(cuisines, o.value))}
+                  />
+                ))}
+                {Array.from({ length: 3 - row.length }, (_, k) => (
+                  <View key={`pad${k}`} style={{ flex: 1 }} />
+                ))}
+              </Row>
+            ))}
+          </View>
         </>
       )}
 
-      {step === 2 && (
+      {n === 3 && (
         <>
-          <Title>What do you actually enjoy eating?</Title>
-          <Body muted>Suggestions you don’t want to eat aren’t useful. Pick as many as you like.</Body>
-          <MultiChipGroup options={CUISINES} value={cuisines} onChange={setCuisines} />
-        </>
-      )}
-
-      {step === 3 && (
-        <>
-          <Title>Anything EatOS must never suggest?</Title>
-          <Body muted>Allergies and diets are strict rules, never just preferences.</Body>
-          <Heading>Allergies</Heading>
-          <MultiChipGroup options={ALLERGENS} value={allergens} onChange={setAllergens} />
-          <Heading>Diet</Heading>
-          <MultiChipGroup options={DIETS} value={diets} onChange={setDiets} />
+          <Header title="Any dietary restrictions?" subtitle="We’ll keep these in mind always. Allergies are strict rules, never just preferences." />
+          <View>
+            <ToggleRow
+              icon="checkmark-circle-outline"
+              label="None"
+              value={allergens.length + diets.length === 0}
+              onChange={() => {
+                setAllergens([]);
+                setDiets([]);
+              }}
+            />
+            {DIETS.map((d) => (
+              <ToggleRow key={d.value} icon={d.icon} label={d.label} value={diets.includes(d.value)} onChange={() => setDiets(toggleIn(diets, d.value))} />
+            ))}
+            {ALLERGENS.map((a) => (
+              <ToggleRow
+                key={a.value}
+                icon={a.icon}
+                label={a.label}
+                value={allergens.includes(a.value)}
+                onChange={() => setAllergens(toggleIn(allergens, a.value))}
+              />
+            ))}
+          </View>
           {allergens.length > 0 ? (
             <Caution>
-              EatOS filters out meals that normally contain your allergens, but it can’t see restaurant kitchens or
-              product labels. Always confirm with staff and check labels.
+              EatOS filters out meals that normally contain your allergens, but it can’t see restaurant kitchens or product labels. Always
+              confirm with staff and check labels.
             </Caution>
           ) : null}
         </>
       )}
 
-      {step === 4 && (
+      {n === 4 && (
         <>
-          <Title>What do you usually like to spend on a meal?</Title>
-          <Body muted>You can change it any time you decide.</Body>
-          <ChipGroup options={BUDGETS} value={budget as BudgetTier} onChange={setBudget} />
+          <Header title="What’s your typical budget per meal?" subtitle="This helps with realistic options." />
+          <View style={{ gap: space.sm }} accessibilityRole="radiogroup" accessibilityLabel="Budget per meal">
+            {BUDGETS.map((b) => (
+              <RadioRow key={b.value} label={b.label} selected={budget === b.value} onPress={() => setBudget(b.value)} />
+            ))}
+          </View>
+          <ChipGroup stretch label="How much time do you usually have?" options={TIMES} value={time} onChange={setTime} />
         </>
       )}
 
-      {step === 5 && (
+      {n === 5 && (
         <>
-          <Title>Anything else EatOS should keep in mind?</Title>
+          <Header title="What usually makes eating well hard?" subtitle="Pick any that sound familiar. This is where EatOS should help most." />
+          <MultiChipGroup options={STRUGGLES} value={struggles} onChange={setStruggles} />
+        </>
+      )}
+
+      {n === 6 && (
+        <>
+          <Header title="Anything else EatOS should keep in mind?" />
           <MultiChipGroup options={CONSIDERATIONS} value={considerations} onChange={setConsiderations} exclusive="none" />
-          <View style={{ gap: space.sm }}>
-            {considerations.includes('medical') ? (
-              <Caution>
-                EatOS offers general meal ideas, not medical nutrition therapy. If a doctor or dietitian gave you a
-                plan, theirs comes first.
-              </Caution>
-            ) : null}
-            {considerations.includes('ed_sensitive') ? (
-              <Body muted>Got it. EatOS won’t use weight or diet language in its suggestions.</Body>
-            ) : null}
-          </View>
+          {considerations.includes('medical') ? (
+            <Caution>
+              EatOS offers general meal ideas, not medical nutrition therapy. If a doctor or dietitian gave you a plan, theirs comes first.
+            </Caution>
+          ) : null}
+          {considerations.includes('ed_sensitive') ? <Body muted>Got it. EatOS won’t use weight or diet language in its suggestions.</Body> : null}
         </>
       )}
     </Screen>
   );
 }
+
+function Header({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <View style={{ gap: space.xs }}>
+      <Title>{title}</Title>
+      {subtitle ? <Small>{subtitle}</Small> : null}
+    </View>
+  );
+}
+
+function chunk<T>(xs: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < xs.length; i += size) out.push(xs.slice(i, i + size));
+  return out;
+}
+
+/** Decorative leaf silhouettes behind the splash (purely visual, hidden from screen readers). */
+function Leaves() {
+  const spots = [
+    { top: -30, left: -40, size: 220, rotate: '-20deg', opacity: 0.12 },
+    { top: 120, right: -60, size: 200, rotate: '35deg', opacity: 0.1 },
+    { bottom: 140, left: -50, size: 180, rotate: '160deg', opacity: 0.09 },
+    { bottom: -40, right: -30, size: 240, rotate: '200deg', opacity: 0.12 },
+  ];
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {spots.map((s, i) => (
+        <View
+          key={i}
+          style={{ position: 'absolute', top: s.top, bottom: s.bottom, left: s.left, right: s.right, opacity: s.opacity, transform: [{ rotate: s.rotate }] }}
+        >
+          <Icon name="leaf" size={s.size} color="#7FBF7A" />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function Confetti() {
+  const colors = ['#4E9B5A', '#A8D38A', '#F1B24A', '#E86F51', '#5B8DEF'];
+  return (
+    <View style={{ height: 0 }} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {Array.from({ length: 14 }, (_, i) => (
+        <View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: `${(i * 37) % 100}%`,
+            top: (i * 23) % 70,
+            width: 6,
+            height: 14,
+            borderRadius: 2,
+            backgroundColor: colors[i % colors.length],
+            transform: [{ rotate: `${(i * 47) % 180}deg` }],
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  splash: { flex: 1, justifyContent: 'space-between', padding: space.xl, paddingTop: 96, paddingBottom: space.xl },
+  tagline: { fontSize: 24, lineHeight: 34, fontWeight: '500' },
+  checklist: { borderRadius: 18, borderWidth: 1, padding: space.lg, gap: space.md },
+});

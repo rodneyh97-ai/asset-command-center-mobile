@@ -2,7 +2,7 @@ import { recommend } from '../recommend';
 import type { Profile, Context, Allergen, Diet } from '../types';
 const settings = ['home','takeout','restaurant','work','on_the_go'] as const;
 const mealTimes = ['breakfast','lunch','dinner','snack'] as const;
-const times = [5,15,30,60] as const;
+const times = [10, 20, 60] as const;
 const budgets = [1,2,3,4] as const;
 const personas: [string, Allergen[], Diet[]][] = [
   ['none',[],[]],['vegetarian',[],['vegetarian']],['vegan',[],['vegan']],['gluten',['gluten'],[]],['dairy',['dairy'],[]],

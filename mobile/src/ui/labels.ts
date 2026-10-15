@@ -1,4 +1,4 @@
-// User-facing labels for every option. Kept in one place for consistent wording.
+// User-facing labels and icons for every option, matched to the design. One place for wording.
 import type {
   Allergen,
   BudgetTier,
@@ -12,15 +12,27 @@ import type {
   Struggle,
   TimeAvailable,
 } from '../engine';
-import type { Option } from './components';
+import type { IconName, Option } from './components';
 
-export const GOALS: Option<Goal>[] = [
-  { value: 'eat_better', label: 'Eat better overall' },
-  { value: 'lose_weight', label: 'Lose weight' },
-  { value: 'maintain', label: 'Maintain my weight' },
-  { value: 'build_muscle', label: 'Build muscle' },
-  { value: 'more_energy', label: 'Have more energy' },
+export interface RichOption<T extends string | number> extends Option<T> {
+  icon: IconName;
+  subtitle?: string;
+}
+
+/** Goals offered in onboarding (design shows four). 'more_energy' remains valid for existing users. */
+export const GOALS: RichOption<Goal>[] = [
+  { value: 'lose_weight', label: 'Lose weight', subtitle: '(leaner, healthier)', icon: 'trending-down-outline' },
+  { value: 'build_muscle', label: 'Build muscle', subtitle: '(stronger, more energy)', icon: 'barbell-outline' },
+  { value: 'maintain', label: 'Maintain weight', subtitle: '(stay consistent)', icon: 'scale-outline' },
+  { value: 'eat_better', label: 'Be healthier', subtitle: '(more energy, better habits)', icon: 'leaf-outline' },
 ];
+export const GOAL_LABEL: Record<Goal, string> = {
+  lose_weight: 'Lose weight',
+  build_muscle: 'Build muscle',
+  maintain: 'Maintain weight',
+  eat_better: 'Be healthier',
+  more_energy: 'Have more energy',
+};
 
 export const STRUGGLES: Option<Struggle>[] = [
   { value: 'no_time', label: 'No time' },
@@ -31,44 +43,46 @@ export const STRUGGLES: Option<Struggle>[] = [
   { value: 'eating_out', label: 'I eat out a lot' },
 ];
 
-export const CUISINES: Option<Cuisine>[] = [
-  { value: 'american', label: 'American' },
-  { value: 'mexican', label: 'Mexican' },
-  { value: 'italian', label: 'Italian' },
-  { value: 'asian', label: 'Asian' },
-  { value: 'mediterranean', label: 'Mediterranean' },
-  { value: 'indian', label: 'Indian' },
-  { value: 'breakfast', label: 'Breakfast foods' },
-  { value: 'simple', label: 'Simple & plain' },
+export const CUISINES: (Option<Cuisine> & { emoji: string })[] = [
+  { value: 'american', label: 'American', emoji: '🍔' },
+  { value: 'mexican', label: 'Mexican', emoji: '🌮' },
+  { value: 'italian', label: 'Pasta & Italian', emoji: '🍝' },
+  { value: 'asian', label: 'Asian', emoji: '🥢' },
+  { value: 'mediterranean', label: 'Salads & Mediterranean', emoji: '🥗' },
+  { value: 'indian', label: 'Indian', emoji: '🍛' },
+  { value: 'breakfast', label: 'Breakfast', emoji: '🍳' },
+  { value: 'simple', label: 'Simple & plain', emoji: '🍚' },
 ];
 
-export const ALLERGENS: Option<Allergen>[] = [
-  { value: 'peanut', label: 'Peanuts' },
-  { value: 'tree_nut', label: 'Tree nuts' },
-  { value: 'dairy', label: 'Dairy' },
-  { value: 'egg', label: 'Eggs' },
-  { value: 'gluten', label: 'Gluten / wheat' },
-  { value: 'soy', label: 'Soy' },
-  { value: 'fish', label: 'Fish' },
-  { value: 'shellfish', label: 'Shellfish' },
-  { value: 'sesame', label: 'Sesame' },
+export const ALLERGENS: RichOption<Allergen>[] = [
+  { value: 'peanut', label: 'Peanut allergy', icon: 'alert-circle-outline' },
+  { value: 'tree_nut', label: 'Tree nut allergy', icon: 'alert-circle-outline' },
+  { value: 'dairy', label: 'Dairy free', icon: 'water-outline' },
+  { value: 'egg', label: 'Egg allergy', icon: 'egg-outline' },
+  { value: 'gluten', label: 'Gluten free', icon: 'nutrition-outline' },
+  { value: 'soy', label: 'Soy allergy', icon: 'alert-circle-outline' },
+  { value: 'fish', label: 'Fish allergy', icon: 'fish-outline' },
+  { value: 'shellfish', label: 'Shellfish allergy', icon: 'fish-outline' },
+  { value: 'sesame', label: 'Sesame allergy', icon: 'alert-circle-outline' },
 ];
 
-export const DIETS: Option<Diet>[] = [
-  { value: 'vegetarian', label: 'Vegetarian' },
-  { value: 'vegan', label: 'Vegan' },
-  { value: 'pescatarian', label: 'Pescatarian' },
-  { value: 'no_pork', label: 'No pork' },
-  { value: 'no_red_meat', label: 'No red meat' },
+export const DIETS: RichOption<Diet>[] = [
+  { value: 'vegetarian', label: 'Vegetarian', icon: 'leaf-outline' },
+  { value: 'vegan', label: 'Vegan', icon: 'flower-outline' },
+  { value: 'pescatarian', label: 'Pescatarian', icon: 'fish-outline' },
+  { value: 'no_pork', label: 'No pork', icon: 'close-circle-outline' },
+  { value: 'no_red_meat', label: 'No red meat', icon: 'close-circle-outline' },
 ];
 
+/** The user's own budget preference (not a claim about what any meal costs). */
 export const BUDGETS: Option<BudgetTier>[] = [
-  { value: 1, label: '$ Keep it cheap' },
-  { value: 2, label: '$$ Moderate' },
-  { value: 3, label: '$$$ Treat' },
-  { value: 4, label: '$$$$ Splurge' },
+  { value: 1, label: 'Under $10' },
+  { value: 2, label: '$10 – $15' },
+  { value: 3, label: '$15 – $25' },
+  { value: 4, label: '$25+' },
 ];
 
+/** Typical relative cost of a meal pattern. Estimates only; prices vary by place. */
 export const BUDGET_SHORT: Record<BudgetTier, string> = { 1: '$', 2: '$$', 3: '$$$', 4: '$$$$' };
 
 export const CONSIDERATIONS: Option<Consideration>[] = [
@@ -78,31 +92,37 @@ export const CONSIDERATIONS: Option<Consideration>[] = [
   { value: 'none', label: 'Nothing else' },
 ];
 
-export const SETTINGS: Option<Setting>[] = [
-  { value: 'home', label: 'Home' },
-  { value: 'takeout', label: 'Takeout' },
-  { value: 'restaurant', label: 'Restaurant' },
-  { value: 'work', label: 'At work' },
-  { value: 'on_the_go', label: 'On the go' },
+export const SETTINGS: RichOption<Setting>[] = [
+  { value: 'home', label: 'At home', icon: 'home-outline' },
+  { value: 'restaurant', label: 'Restaurant', icon: 'restaurant-outline' },
+  { value: 'takeout', label: 'Takeout', icon: 'bag-handle-outline' },
+  { value: 'work', label: 'At work', icon: 'briefcase-outline' },
+  { value: 'on_the_go', label: 'On the go', icon: 'airplane-outline' },
 ];
 
 export const HUNGER: Option<Hunger>[] = [
-  { value: 'light', label: 'A little' },
-  { value: 'normal', label: 'Hungry' },
-  { value: 'very', label: 'Starving' },
+  { value: 'light', label: 'Light' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'very', label: 'Very' },
 ];
 
 export const TIMES: Option<TimeAvailable>[] = [
-  { value: 5, label: '5 min' },
-  { value: 15, label: '15 min' },
-  { value: 30, label: '30 min' },
-  { value: 60, label: 'An hour' },
+  { value: 10, label: '5–10 min' },
+  { value: 20, label: '10–20 min' },
+  { value: 60, label: '20+ min' },
 ];
 
-export const FEELINGS: Option<Feeling>[] = [
-  { value: 'fine', label: 'Fine' },
-  { value: 'tired', label: 'Tired' },
-  { value: 'stressed', label: 'Stressed' },
-  { value: 'comfort', label: 'Want comfort' },
-  { value: 'energized', label: 'Energized' },
+/** Feelings shown on Home (design shows four). 'comfort' remains valid in the engine. */
+export const FEELINGS: (Option<Feeling> & { emoji: string })[] = [
+  { value: 'stressed', label: 'Stressed', emoji: '😣' },
+  { value: 'tired', label: 'Tired', emoji: '😴' },
+  { value: 'fine', label: 'Good', emoji: '🙂' },
+  { value: 'energized', label: 'Energized', emoji: '💪' },
 ];
+export const FEELING_EMOJI: Record<Feeling, string> = {
+  stressed: '😣',
+  tired: '😴',
+  fine: '🙂',
+  energized: '💪',
+  comfort: '🫶',
+};

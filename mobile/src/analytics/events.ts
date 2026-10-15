@@ -24,6 +24,13 @@ export type AnalyticsName =
   | 'reminders_changed'
   | 'checkin_completed'
   | 'checkin_snoozed'
+  | 'alt_more_like'
+  | 'alt_swap_ingredients'
+  | 'alt_lower_cost'
+  | 'alt_different'
+  | 'premium_viewed'
+  | 'premium_interest'
+  | 'search_used'
   | 'goal_changed';
 
 export interface AnalyticsEvent {

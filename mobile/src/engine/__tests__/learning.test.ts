@@ -165,7 +165,7 @@ describe('learning safeguards', () => {
     }));
     const p: Profile = { ...profile, allergens: ['peanut'] };
     for (const mealTime of ['breakfast', 'snack'] as const) {
-      const r = recommend(p, { setting: 'home', mealTime, hunger: 'light', time: 15, budget: 2, feeling: 'fine' }, { history, now });
+      const r = recommend(p, { setting: 'home', mealTime, hunger: 'light', time: 20, budget: 2, feeling: 'fine' }, { history, now });
       for (const x of [r.primary, ...r.alternatives]) expect(x?.meal.contains).not.toContain('peanut');
     }
   });
@@ -180,7 +180,7 @@ describe('learning safeguards', () => {
     const history: FeedbackEvent[] = ['burrito-bowl', 'veggie-burrito-bowl', 'chicken-shawarma-plate', 'veggie-pizza-salad', 'beef-pho', 'grilled-chicken-sandwich'].flatMap(
       (id, i) => [{ mealId: id, kind: 'accepted' as const, at: ago(2 + i) }],
     );
-    const r = recommend(profile, { setting: 'takeout', mealTime: 'dinner', hunger: 'normal', time: 30, budget: 3, feeling: 'fine' }, { history, now });
+    const r = recommend(profile, { setting: 'takeout', mealTime: 'dinner', hunger: 'normal', time: 20, budget: 3, feeling: 'fine' }, { history, now });
     const alts = r.alternatives;
     if ([r.primary, ...alts.slice(0, 1)].every((x) => history.some((h) => h.mealId === x!.meal.id))) {
       expect(alts[1].isNew).toBe(true);
@@ -196,7 +196,7 @@ describe('learning safeguards', () => {
       setting: 'work' as const,
       mealTime: 'lunch' as const,
     }));
-    const r = recommend(profile, { setting: 'work', mealTime: 'lunch', hunger: 'normal', time: 15, budget: 2, feeling: 'fine' }, { history, now });
+    const r = recommend(profile, { setting: 'work', mealTime: 'lunch', hunger: 'normal', time: 20, budget: 2, feeling: 'fine' }, { history, now });
     const all = [r.primary, ...r.alternatives];
     const salad = all.find((x) => x?.meal.id === 'chickpea-salad');
     expect(salad?.reasons).toContain('Your usual for lunch at work');

@@ -54,18 +54,11 @@ function RootStack() {
         contentStyle: { backgroundColor: c.background },
       }}
     >
-      <Stack.Screen name="index" />
+      <Stack.Screen name="(tabs)" />
       <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
       <Stack.Screen name="decide" />
-      <Stack.Screen
-        name="settings"
-        options={{
-          headerShown: true,
-          title: 'Preferences',
-          headerStyle: { backgroundColor: c.background },
-          headerTintColor: c.ink,
-        }}
-      />
+      <Stack.Screen name="meal/[id]" />
+      <Stack.Screen name="premium" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

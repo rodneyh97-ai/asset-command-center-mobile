@@ -1,25 +1,47 @@
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { clock } from '../clock';
-import { isSaved, mealTimeFor, recommend, swapsFor, type Recommendation } from '../engine';
+import { isSaved, mealTimeFor, recommend, swapsFor, type BudgetTier, type MealIdea, type Recommendation } from '../engine';
 import { useStore } from '../store/AppProvider';
 import { defaultContext, nextMealSlot } from '../store/state';
-import { Body, Button, Card, Cautions, Heading, Screen, Small, TextAction, Title } from '../ui/components';
-import { BUDGET_SHORT } from '../ui/labels';
+import {
+  Body,
+  Button,
+  Card,
+  Cautions,
+  Heading,
+  ListRow,
+  Logo,
+  MealArt,
+  Row,
+  Screen,
+  Small,
+  Tags,
+  TextAction,
+  Title,
+} from '../ui/components';
+import { MealDetail, MealFacts } from '../ui/MealDetail';
+import { mealTags } from '../ui/mealTags';
 import { space, useColors } from '../ui/theme';
+
+type Nudge = { moreLike?: MealIdea['cuisine']; avoid?: MealIdea['cuisine'] };
 
 export default function Decide() {
   const { state, dispatch, track, feedback } = useStore();
+  const c = useColors();
   const planning = useLocalSearchParams<{ plan?: string }>().plan === '1';
   const [slot] = useState(() => nextMealSlot(clock.now()));
-  const c = useColors();
   const [startedAt] = useState(now);
   const [exclude, setExclude] = useState<string[]>([]);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [chosen, setChosen] = useState<Recommendation | null>(null);
   const [chosenAt, setChosenAt] = useState(0);
+  const [view, setView] = useState<'main' | 'alternatives'>('main');
+  const [nudge, setNudge] = useState<Nudge | undefined>(undefined);
+  const [budgetOverride, setBudgetOverride] = useState<BudgetTier | null>(null);
+  const [showSwaps, setShowSwaps] = useState(false);
   const profile = state.profile;
 
   // History is read once per screen visit so tapping Save doesn't reshuffle the cards under the user's finger.
@@ -29,15 +51,16 @@ export default function Decide() {
       profile
         ? {
             ...(state.lastContext ?? defaultContext(profile)),
+            budget: budgetOverride ?? profile.budget,
             mealTime: planning ? slot.mealTime : mealTimeFor(clock.now()),
           }
         : null,
-    [profile, state.lastContext, planning, slot],
+    [profile, state.lastContext, planning, slot, budgetOverride],
   );
   const result = useMemo(() => {
     if (!profile || !ctx) return null;
-    return recommend(profile, ctx, { history: historyAtOpen, exclude });
-  }, [profile, ctx, exclude, historyAtOpen]);
+    return recommend(profile, ctx, { history: historyAtOpen, exclude, nudge });
+  }, [profile, ctx, exclude, historyAtOpen, nudge]);
 
   const shown = result ? [result.primary, ...result.alternatives].filter((r): r is Recommendation => !!r) : [];
   const primary = shown.find((r) => r.meal.id === focusId) ?? shown[0];
@@ -49,27 +72,33 @@ export default function Decide() {
     else if (result) track('recommendation_empty');
   }, [primaryId, result, track]);
 
-  if (!profile || !result) return <Redirect href="/onboarding" />;
+  if (!profile || !result || !ctx) return <Redirect href="/onboarding" />;
 
   const accept = (r: Recommendation) => {
-    if (chosen || !ctx) return; // ignore double taps
+    if (chosen) return; // ignore double taps
     const t = now();
     if (planning) {
       dispatch({ type: 'setPlan', plan: { mealId: r.meal.id, mealTime: slot.mealTime, date: slot.date, setting: ctx.setting } });
       track('meal_planned', { mealTime: slot.mealTime });
     } else {
-      feedback(r.meal.id, 'accepted', { setting: ctx.setting, mealTime: ctx.mealTime });
+      feedback(r.meal.id, 'accepted', { setting: ctx.setting, mealTime: ctx.mealTime, feeling: ctx.feeling });
       track('recommendation_accepted', { msSinceStart: t - startedAt, rank: shown.indexOf(r), wasNew: !!r.isNew });
     }
     setChosen(r);
     setChosenAt(t);
   };
 
+  const refresh = (n?: Nudge) => {
+    setFocusId(null);
+    setNudge(n);
+    setExclude([...exclude, ...shown.map((r) => r.meal.id)]);
+    setView('main');
+  };
+
   const swap = () => {
     if (primary) feedback(primary.meal.id, 'swapped');
     track('recommendation_swapped');
-    setFocusId(null);
-    setExclude([...exclude, ...shown.map((r) => r.meal.id)]);
+    refresh(nudge);
   };
 
   const dislike = (r: Recommendation) => {
@@ -79,29 +108,27 @@ export default function Decide() {
     setExclude([...exclude, r.meal.id]);
   };
 
+  // ---------- Confirmation ----------
   if (chosen) {
-    const goHome = () => {
-      if (now() - chosenAt > DOUBLE_TAP_MS) router.back();
-    };
+    const later = () => now() - chosenAt > DOUBLE_TAP_MS; // "Done" sits where "Try this" was; ignore a double tap
     return (
       <Screen
         footer={
           <>
-            {/* "Done" appears where "I'll have this" was; ignore the second half of a double tap. */}
-            <Button label="Done" onPress={goHome} />
+            <Button label="Done" onPress={() => later() && router.back()} />
             {!planning ? (
               <Button
                 label={`Plan my ${nextMealSlot(clock.now()).mealTime} too`}
                 variant="secondary"
+                icon="calendar-outline"
                 hint="Deciding ahead makes it easier to follow through"
-                onPress={() => {
-                  if (now() - chosenAt > DOUBLE_TAP_MS) router.replace('/decide?plan=1');
-                }}
+                onPress={() => later() && router.replace('/decide?plan=1')}
               />
             ) : null}
           </>
         }
       >
+        <MealArt meal={chosen.meal} variant="hero" />
         {planning ? (
           <>
             <Title>
@@ -116,7 +143,7 @@ export default function Decide() {
           </>
         )}
         <Card>
-          <Heading>How to do it</Heading>
+          <Heading>How to get it</Heading>
           <Body>{chosen.meal.howTo}</Body>
         </Card>
         <Cautions items={chosen.cautions} />
@@ -124,12 +151,21 @@ export default function Decide() {
     );
   }
 
+  // ---------- Nothing left ----------
   if (!primary) {
     return (
       <Screen
         footer={
           <>
-            {exclude.length > 0 ? <Button label="Start over" onPress={() => setExclude([])} /> : null}
+            {exclude.length > 0 ? (
+              <Button
+                label="Start over"
+                onPress={() => {
+                  setExclude([]);
+                  setNudge(undefined);
+                }}
+              />
+            ) : null}
             <Button label="Change my situation" variant="secondary" onPress={() => router.back()} />
           </>
         }
@@ -143,18 +179,97 @@ export default function Decide() {
   const saved = isSaved(primary.meal.id, state.history);
   const swaps = swapsFor(primary.meal, profile);
 
+  // ---------- Alternatives ----------
+  if (view === 'alternatives') {
+    return (
+      <Screen>
+        <Row>
+          <TextAction icon="chevron-back" a11yLabel="Back to recommendation" onPress={() => setView('main')} />
+        </Row>
+        <View style={{ gap: 2 }}>
+          <Title>Other Options</Title>
+          <Body muted>Here are a couple more good choices.</Body>
+        </View>
+        {others.length === 0 ? <Body muted>No other options fit right now.</Body> : null}
+        {others.map((r) => (
+          <Card key={r.meal.id} style={{ flexDirection: 'row', gap: space.md, padding: space.md }}>
+            <MealArt meal={r.meal} variant="thumb" />
+            <View style={{ flex: 1, gap: space.xs }}>
+              <Heading style={{ fontSize: 16 }}>{r.meal.name}</Heading>
+              <Tags labels={mealTags(r.meal, 2)} />
+              <MealFacts meal={r.meal} setting={ctx.setting} />
+              {r.cautions.length > 0 ? <Small style={{ color: c.cautionText }}>⚠︎ {r.cautions[0]}</Small> : null}
+              <Button label="Choose this" a11yLabel={`Choose ${r.meal.name}`} onPress={() => accept(r)} />
+            </View>
+          </Card>
+        ))}
+
+        <Heading>Not feeling these?</Heading>
+        <View style={{ gap: space.sm }}>
+          <ListRow
+            icon="sparkles-outline"
+            label="Show more like this"
+            onPress={() => {
+              track('alt_more_like');
+              refresh({ moreLike: primary.meal.cuisine });
+            }}
+          />
+          <ListRow
+            icon="swap-horizontal-outline"
+            label="Swap ingredients"
+            onPress={() => {
+              track('alt_swap_ingredients');
+              setShowSwaps(!showSwaps);
+            }}
+            right={<Small>{showSwaps ? 'Hide' : ''}</Small>}
+          />
+          {showSwaps ? (
+            <Card>
+              {swaps.length ? (
+                swaps.map((s) => (
+                  <Body key={s} muted>
+                    • {s}
+                  </Body>
+                ))
+              ) : (
+                <Body muted>No safe swaps for {primary.meal.name.toLowerCase()} with your restrictions.</Body>
+              )}
+            </Card>
+          ) : null}
+          <ListRow
+            icon="wallet-outline"
+            label={ctx.budget > 1 ? 'Adjust for lower cost' : 'Already at your lowest budget'}
+            onPress={() => {
+              if (ctx.budget <= 1) return;
+              track('alt_lower_cost');
+              setBudgetOverride((ctx.budget - 1) as BudgetTier);
+              setFocusId(null);
+              setView('main');
+            }}
+          />
+          <ListRow
+            icon="shuffle-outline"
+            label="Something different"
+            onPress={() => {
+              track('alt_different');
+              refresh({ avoid: primary.meal.cuisine });
+            }}
+          />
+        </View>
+      </Screen>
+    );
+  }
+
+  // ---------- Main recommendation ----------
   return (
     <Screen
       footer={
         <>
-          <Button label={planning ? `Plan this for ${slot.mealTime}` : 'I’ll have this'} onPress={() => accept(primary)} />
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            <View style={{ flex: 1 }}>
-              <Button label="Something else" variant="secondary" onPress={swap} />
-            </View>
+          <Row>
             <View style={{ flex: 1 }}>
               <Button
-                label={saved ? 'Saved ✓' : 'Save'}
+                label={saved ? 'Saved' : 'Save'}
+                icon={saved ? 'bookmark' : 'bookmark-outline'}
                 variant="secondary"
                 onPress={() => {
                   feedback(primary.meal.id, saved ? 'unsaved' : 'saved');
@@ -162,74 +277,38 @@ export default function Decide() {
                 }}
               />
             </View>
-          </View>
+            <View style={{ flex: 1.4 }}>
+              <Button
+                label={planning ? `Plan for ${slot.mealTime}` : 'Try this'}
+                a11yLabel={planning ? `Plan this for ${slot.mealTime}` : 'Try this'}
+                onPress={() => accept(primary)}
+              />
+            </View>
+          </Row>
+          <Button label="See Alternatives" variant="secondary" onPress={() => setView('alternatives')} />
         </>
       }
     >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <TextAction label="‹ Back" a11yLabel="Back" onPress={() => router.back()} />
-        <TextAction
-          label="Not for me"
-          a11yLabel={`Not for me: never suggest ${primary.meal.name} again`}
-          onPress={() => dislike(primary)}
-        />
-      </View>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Row gap={0}>
+          <TextAction icon="chevron-back" a11yLabel="Back" onPress={() => router.back()} />
+          <Logo size={22} />
+        </Row>
+        <Row gap={0}>
+          <TextAction icon="refresh" a11yLabel="Something else" onPress={swap} />
+          <TextAction
+            icon="thumbs-down-outline"
+            a11yLabel={`Not for me: never suggest ${primary.meal.name} again`}
+            onPress={() => dislike(primary)}
+          />
+        </Row>
+      </Row>
 
-      <Small>{planning ? `Planning your ${slot.mealTime}` : 'Your best option right now'}</Small>
-      <Title>{primary.meal.name}</Title>
-      <Body muted>{primary.meal.summary}</Body>
+      <Heading>{planning ? `Planning your ${slot.mealTime}` : 'Your Recommendation'}</Heading>
+      {budgetOverride ? <Small>Showing options at a lower cost.</Small> : null}
+      {primary.isNew ? <Small>Something new you might like</Small> : null}
 
-      <Cautions items={primary.cautions} />
-
-      <Card>
-        <Heading>Why this fits</Heading>
-        {primary.reasons.map((r) => (
-          <Body key={r}>• {r}</Body>
-        ))}
-        <Small>Typical cost: {BUDGET_SHORT[primary.meal.budget]} (varies by place)</Small>
-      </Card>
-
-      <Card>
-        <Heading>How to do it</Heading>
-        <Body>{primary.meal.howTo}</Body>
-        {swaps.length > 0 ? (
-          <>
-            <Small muted={false}>Easy swaps</Small>
-            {swaps.map((s) => (
-              <Body key={s} muted>
-                • {s}
-              </Body>
-            ))}
-          </>
-        ) : null}
-      </Card>
-
-      {others.length > 0 ? (
-        <View style={{ gap: space.sm }}>
-          <Heading>Or</Heading>
-          {others.map((r) => (
-            <Pressable
-              key={r.meal.id}
-              accessibilityRole="button"
-              accessibilityLabel={`${r.meal.name}. ${r.reasons[0] ?? ''}. Tap to see details.`}
-              onPress={() => setFocusId(r.meal.id)}
-              style={({ pressed }) => ({
-                padding: space.lg,
-                minHeight: 56,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: c.border,
-                backgroundColor: c.surface,
-                opacity: pressed ? 0.7 : 1,
-                gap: space.xs,
-              })}
-            >
-              <Body>{r.meal.name}</Body>
-              <Small>{r.reasons[0] ?? r.meal.summary}</Small>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
+      <MealDetail meal={primary.meal} reasons={primary.reasons} cautions={primary.cautions} swaps={swaps} setting={ctx.setting} />
     </Screen>
   );
 }

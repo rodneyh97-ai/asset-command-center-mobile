@@ -220,7 +220,7 @@ function scoreMeal(
 
   // Time / effort
   const athome = ctx.setting === 'home' || ctx.setting === 'work';
-  if (athome && ctx.time <= 15 && meal.prepMinutes <= 5) add(1.5, `Ready in about ${Math.max(meal.prepMinutes, 2)} minutes`);
+  if (athome && ctx.time <= 20 && meal.prepMinutes <= 5) add(1.5, `Ready in about ${Math.max(meal.prepMinutes, 2)} minutes`);
   else if (athome && meal.prepMinutes <= ctx.time) add(0.5, `Ready in about ${meal.prepMinutes} minutes`);
 
   // Feeling
@@ -294,6 +294,8 @@ export interface RecommendOptions {
   catalog?: MealIdea[];
   /** Set false to ignore learned taste (used to measure how much learning helps). */
   learn?: boolean;
+  /** One-off steering from "Not feeling these?" (more like X / something different). */
+  nudge?: { moreLike?: MealIdea['cuisine']; avoid?: MealIdea['cuisine'] };
 }
 
 export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions = {}): RecommendationResult {
@@ -312,7 +314,14 @@ export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions
     if (!elig.ok) continue;
     eligibleCount++;
     if (exclude.has(meal.id)) continue;
-    const { score, reasons } = scoreMeal(meal, profile, ctx, history, now, taste);
+    const scored = scoreMeal(meal, profile, ctx, history, now, taste);
+    let { score } = scored;
+    const { reasons } = scored;
+    if (opts.nudge?.moreLike && meal.cuisine === opts.nudge.moreLike) {
+      score += 4;
+      reasons.push({ weight: 4, text: 'Similar to what you were looking at' });
+    }
+    if (opts.nudge?.avoid && meal.cuisine === opts.nudge.avoid) score -= 6;
     const shown = reasons
       .filter((r) => r.weight > 0 && r.text)
       .sort((a, b) => b.weight - a.weight)

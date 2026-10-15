@@ -42,7 +42,8 @@ export type BudgetTier = 1 | 2 | 3 | 4;
 export type Setting = 'home' | 'takeout' | 'restaurant' | 'work' | 'on_the_go';
 export type Hunger = 'light' | 'normal' | 'very';
 /** Minutes until the user needs to be eating. */
-export type TimeAvailable = 5 | 15 | 30 | 60;
+/** Upper bound (minutes) of the time bucket the user picked: 5–10, 10–20, 20+. */
+export type TimeAvailable = 10 | 20 | 60;
 export type Feeling = 'fine' | 'tired' | 'stressed' | 'comfort' | 'energized';
 export type MealTime = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
@@ -123,6 +124,8 @@ export interface FeedbackEvent {
   /** Where/when it happened (recorded on accepts) so EatOS can learn habits. */
   setting?: Setting;
   mealTime?: MealTime;
+  /** How the user said they felt when choosing (for the weekly mood view). */
+  feeling?: Feeling;
 }
 
 export interface ScoredReason {

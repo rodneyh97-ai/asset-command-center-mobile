@@ -1,5 +1,5 @@
 // Pure app-state logic (no React, no storage) so it can be unit-tested.
-import { CATALOG, safetyCheck, type Context, type FeedbackEvent, type FeedbackKind, type MealIdea, type MealTime, type Profile, type Setting } from '../engine';
+import { CATALOG, safetyCheck, type Context, type FeedbackEvent, type FeedbackKind, type Feeling, type MealIdea, type MealTime, type Profile, type Setting } from '../engine';
 import { isSaved } from '../engine/recommend';
 import { sanitizeContext, sanitizeFeedback, sanitizeProfile, VALID } from '../engine/validate';
 import type { AnalyticsEvent } from '../analytics/events';
@@ -57,7 +57,7 @@ export type Action =
   | { type: 'completeOnboarding'; profile: Profile }
   | { type: 'updateProfile'; patch: Partial<Omit<Profile, 'createdAt'>> }
   | { type: 'setLastContext'; context: SavedContext }
-  | { type: 'feedback'; mealId: string; kind: FeedbackKind; at: string; setting?: Setting; mealTime?: MealTime }
+  | { type: 'feedback'; mealId: string; kind: FeedbackKind; at: string; setting?: Setting; mealTime?: MealTime; feeling?: Feeling }
   | { type: 'track'; event: AnalyticsEvent }
   | { type: 'deleteAll' }
   | { type: 'clearHidden' }
@@ -91,6 +91,7 @@ export function reducer(state: AppState, action: Action): AppState {
             at: action.at,
             ...(action.setting ? { setting: action.setting } : {}),
             ...(action.mealTime ? { mealTime: action.mealTime } : {}),
+            ...(action.feeling ? { feeling: action.feeling } : {}),
           },
         ].slice(-MAX_HISTORY),
       };
@@ -121,7 +122,7 @@ export function reducer(state: AppState, action: Action): AppState {
 }
 
 export function defaultContext(profile: Profile): SavedContext {
-  return { setting: 'home', hunger: 'normal', time: 15, budget: profile.budget, feeling: 'fine' };
+  return { setting: 'home', hunger: 'normal', time: 20, budget: profile.budget, feeling: 'fine' };
 }
 
 /** Validate + migrate whatever was in storage. Unreadable data is kept aside, never dropped silently. */
