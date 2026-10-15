@@ -14,7 +14,7 @@ psql_f() { # file [extra psql args]
   [ -n "$out" ] && echo "$out"
   return 0
 }
-for f in local_stub.sql ../migrations/0001_init.sql ../migrations/0002_library.sql grants.sql rls_test.sql; do psql_f "$PWD/$f"; done
+for f in local_stub.sql ../migrations/0001_init.sql ../migrations/0002_library.sql ../migrations/0003_retention.sql grants.sql rls_test.sql; do psql_f "$PWD/$f"; done
 # Library: import fixtures with the real importers, load twice (must be idempotent), then test.
 node -e "
   const [u, o, s] = await Promise.all(['usda','off','osm'].map((m) => import('$LIB/' + m + '.mjs')));
@@ -26,4 +26,5 @@ cat "$TMP/usda.tsv" "$TMP/off.tsv" > "$TMP/foods.tsv"
 chmod 644 "$TMP"/*.tsv
 for _ in 1 2; do psql_f "$LIB/load.sql" -v foods="$TMP/foods.tsv" -v places="$TMP/places.tsv"; done
 psql_f "$PWD/library_test.sql"
+psql_f "$PWD/retention_test.sql"
 su postgres -c "dropdb $DB"

@@ -35,7 +35,13 @@ export type AnalyticsName =
   | 'member_saved'
   | 'question_answered'
   | 'meal_logged'
-  | 'goal_changed';
+  | 'goal_changed'
+  | 'setup_completed'
+  | 'setup_snoozed'
+  | 'usage_sharing_changed'
+  | 'weekly_goal_set'
+  | 'welcome_back_shown'
+  | 'review_prompted';
 
 export interface AnalyticsEvent {
   name: AnalyticsName;

@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { Alert, Share } from 'react-native';
 
+import * as reviewModule from '../analytics/review';
 import { ErrorBoundary } from '../app/_layout';
 import { clock } from '../clock';
 import { CATALOG } from '../engine';
@@ -15,22 +16,14 @@ let app: ReturnType<typeof renderRouter>;
 async function onboard(opts: { allergy?: string } = {}) {
   app = renderRouter(routes, { initialUrl: '/' });
   fireEvent.press(await screen.findByLabelText('Get Started'));
-  await screen.findByText('What’s your main goal?');
-  fireEvent.press(screen.getByLabelText('Build muscle'));
-  fireEvent.press(screen.getByLabelText('Next'));
-  fireEvent.press(screen.getByLabelText('Skip')); // foods
+  await screen.findByText('Any dietary restrictions?');
   if (opts.allergy) {
     fireEvent.press(screen.getByLabelText(opts.allergy));
     fireEvent.press(screen.getByLabelText('Next'));
   } else {
     fireEvent.press(screen.getByLabelText('None — Next'));
   }
-  fireEvent.press(screen.getByLabelText('$10 – $15'));
-  fireEvent.press(screen.getByLabelText('Next'));
-  fireEvent.press(screen.getByLabelText('No time'));
-  fireEvent.press(screen.getByLabelText('Next'));
-  fireEvent.press(screen.getByLabelText('Finish'));
-  fireEvent.press(await screen.findByLabelText('Go to Home'));
+  fireEvent.press(screen.getByLabelText('Show my first pick'));
   await screen.findByText('What should I eat?');
 }
 
@@ -69,7 +62,7 @@ describe('core daily flow', () => {
   it('persists preferences: a returning user skips onboarding', async () => {
     await onboard();
     const raw = await AsyncStorage.getItem('eatos.state.v1');
-    expect(JSON.parse(raw!).profile.goal).toBe('build_muscle');
+    expect(JSON.parse(raw!).profile.goal).toBe('eat_better');
 
     screen.unmount();
     renderRouter(routes, { initialUrl: '/' });
@@ -77,10 +70,19 @@ describe('core daily flow', () => {
     expect(screen.queryByLabelText('Get Started')).toBeNull();
   });
 
-  it('onboarding cannot continue without a goal', async () => {
+  it('allergies are the first question, and the first pick comes after just two questions', async () => {
     renderRouter(routes, { initialUrl: '/' });
     fireEvent.press(await screen.findByLabelText('Get Started'));
-    expect(screen.getByLabelText('Next')).toBeDisabled();
+    await screen.findByText('Any dietary restrictions?');
+    fireEvent.press(screen.getByLabelText('Peanut allergy'));
+    fireEvent.press(screen.getByLabelText('Next'));
+    await screen.findByText('Anything else EatOS should keep in mind?');
+    fireEvent.press(screen.getByLabelText('Show my first pick'));
+    fireEvent.press(await screen.findByLabelText('Get my recommendation'));
+    await screen.findByText('Your Recommendation');
+    const stored = JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!);
+    expect(stored.profile).toMatchObject({ allergens: ['peanut'], goal: 'eat_better' });
+    expect(stored.setup.done).toBe(false);
   });
 
   it('allergy chosen in onboarding is enforced on the recommendation screen', async () => {
@@ -179,7 +181,7 @@ describe('ATTACK: UI-level abuse', () => {
     renderRouter(routes, { initialUrl: '/' });
     await screen.findByLabelText('Get Started'); // runs without data this session
     fireEvent.press(screen.getByLabelText('Get Started'));
-    fireEvent.press(screen.getByLabelText('Lose weight'));
+    fireEvent.press(screen.getByLabelText('Shellfish allergy'));
     expect(await AsyncStorage.getItem(KEY)).toBe(before);
   });
 
@@ -612,5 +614,141 @@ describe('history people can see', () => {
     renderRouter(routes, { initialUrl: '/decide' });
     await screen.findByText('Your Recommendation');
     for (const m of CATALOG.filter((x) => MEAL_INGREDIENTS[x.id].includes('rice'))) expect(screen.queryByText(m.name)).toBeNull();
+  });
+});
+
+describe('retention without pressure', () => {
+  const KEY = 'eatos.state.v1';
+  const stored = async () => JSON.parse((await AsyncStorage.getItem(KEY))!);
+  afterEach(() => clock.set(null));
+
+  it('after the first meal, the 4 taste questions are offered; answering never touches allergies', async () => {
+    await onboard({ allergy: 'Peanut allergy' });
+    expect(screen.queryByText(/Answer 4 quick questions/)).toBeNull(); // not before EatOS has helped
+    fireEvent.press(screen.getByLabelText('Get my recommendation'));
+    fireEvent.press(await screen.findByLabelText('Try this'));
+    await screen.findByText(/^Enjoy your/);
+    clock.set(new Date(Date.now() + 1000)); // past the double-tap guard
+    fireEvent.press(screen.getByLabelText('Done'));
+    await screen.findByText(/Answer 4 quick questions/);
+    fireEvent.press(screen.getByLabelText('Let’s do it'));
+    await screen.findByText('What’s your main goal?');
+    fireEvent.press(screen.getByLabelText('Build muscle'));
+    fireEvent.press(screen.getByLabelText('Next'));
+    fireEvent.press(screen.getByLabelText('Mexican'));
+    fireEvent.press(screen.getByLabelText('Next'));
+    fireEvent.press(screen.getByLabelText('$10 – $15'));
+    fireEvent.press(screen.getByLabelText('Next'));
+    fireEvent.press(screen.getByLabelText('No time'));
+    fireEvent.press(screen.getByLabelText('Finish'));
+    await screen.findByText('You’re all set!');
+    const s = await stored();
+    expect(s.profile).toMatchObject({ goal: 'build_muscle', cuisines: ['mexican'], budget: 2, struggles: ['no_time'], allergens: ['peanut'] });
+    expect(s.setup.done).toBe(true);
+    fireEvent.press(screen.getByLabelText('Go to Home'));
+    await screen.findByText('What should I eat?');
+    expect(screen.queryByText(/Answer 4 quick questions/)).toBeNull();
+  });
+
+  it('"Later" hides the setup card', async () => {
+    await onboard();
+    fireEvent.press(screen.getByLabelText('Get my recommendation'));
+    fireEvent.press(await screen.findByLabelText('Try this'));
+    await screen.findByText(/^Enjoy your/);
+    clock.set(new Date(Date.now() + 1000));
+    fireEvent.press(screen.getByLabelText('Done'));
+    fireEvent.press(await screen.findByLabelText('Ask me later'));
+    await waitFor(() => expect(screen.queryByText(/Answer 4 quick questions/)).toBeNull());
+  });
+
+  it('the "more" link can’t be used to skip the allergy question', async () => {
+    renderRouter(routes, { initialUrl: '/onboarding?more=1' });
+    fireEvent.press(await screen.findByLabelText('Get Started'));
+    await screen.findByText('Any dietary restrictions?');
+  });
+
+  const seed = async (over: object = {}) => {
+    const day = 86400000;
+    await AsyncStorage.setItem(
+      KEY,
+      JSON.stringify({
+        version: 1,
+        profile: { goal: 'eat_better', struggles: [], cuisines: [], allergens: [], diets: [], budget: 2, considerations: [], createdAt: new Date(Date.now() - 10 * day).toISOString() },
+        history: [4, 5, 6].map((d) => ({ mealId: 'burrito-bowl', kind: 'accepted', at: new Date(Date.now() - d * day).toISOString(), setting: 'home' })),
+        lastContext: null,
+        analytics: [],
+        setup: { done: true, snoozeUntil: null },
+        checkin: { lastAt: new Date().toISOString(), snoozeUntil: null },
+        ...over,
+      }),
+    );
+  };
+
+  it('a forgiving weekly goal can be picked on Home and shows progress', async () => {
+    await seed();
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByLabelText('Goal: Eat at home more, 3 meals at home a week'));
+    await screen.findByLabelText(/Eat at home more: (done for this week|\d of 3 meals at home this week)/);
+    expect((await stored()).weeklyGoal).toEqual({ kind: 'cook_home', target: 3 });
+  });
+
+  it('after 10+ days away: a welcome back, no guilt', async () => {
+    await seed({ lastOpenAt: new Date(Date.now() - 12 * 86400000).toISOString(), weeklyGoalAsked: true });
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('Welcome back!');
+    expect(screen.queryByText(/missed|streak|lost/i)).toBeNull();
+    fireEvent.press(screen.getByLabelText('Pick something for me'));
+    await screen.findByText('Your Recommendation');
+  });
+
+  it('a normal return shows no welcome back', async () => {
+    await seed({ lastOpenAt: new Date(Date.now() - 2 * 86400000).toISOString(), weeklyGoalAsked: true });
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('What should I eat?');
+    expect(screen.queryByText('Welcome back!')).toBeNull();
+  });
+
+  it('asks for a store rating only after good experiences', async () => {
+    const review = jest.spyOn(reviewModule, 'askForReview').mockResolvedValue(true);
+    const day = 86400000;
+    const history = [
+      ...[4, 5, 6].map((d) => ({ mealId: 'burrito-bowl', kind: 'accepted', at: new Date(Date.now() - d * day).toISOString() })),
+      { mealId: 'burrito-bowl', kind: 'loved', at: new Date(Date.now() - 4 * day).toISOString() },
+    ];
+    await seed({ weeklyGoalAsked: true, history });
+    renderRouter(routes, { initialUrl: '/decide' });
+    fireEvent.press(await screen.findByLabelText('Try this'));
+    await screen.findByText(/^Enjoy your/);
+    jest.advanceTimersByTime(2000);
+    await waitFor(() => expect(review).toHaveBeenCalledTimes(1));
+    await waitFor(async () => expect((await stored()).reviewPrompts).toHaveLength(1));
+    review.mockRestore();
+  });
+
+  it('never asks for a rating without a "loved" meal', async () => {
+    const review = jest.spyOn(reviewModule, 'askForReview').mockResolvedValue(true);
+    await seed({ weeklyGoalAsked: true });
+    renderRouter(routes, { initialUrl: '/decide' });
+    fireEvent.press(await screen.findByLabelText('Try this'));
+    await screen.findByText(/^Enjoy your/);
+    jest.advanceTimersByTime(2000);
+    expect(review).not.toHaveBeenCalled();
+    review.mockRestore();
+  });
+
+  it('shows how much EatOS has learned, linking to what it knows', async () => {
+    const at = new Date().toISOString();
+    const mem = (id: string, value: string) => ({ id, subject: 'me', topic: 'dislike_food', value, kind: 'stated', source: 'manual', createdAt: at, updatedAt: at });
+    await seed({ weeklyGoalAsked: true, memories: [mem('a', 'olives'), mem('b', 'mushrooms'), mem('c', 'tuna')] });
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByLabelText(/^EatOS has learned \d+ things about you/));
+    await screen.findByText(/olives/i);
+  });
+
+  it('no usage-sharing question when no server is configured', async () => {
+    await seed({ weeklyGoalAsked: true });
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('What should I eat?');
+    expect(screen.queryByText('Share which days you open EatOS?')).toBeNull();
   });
 });

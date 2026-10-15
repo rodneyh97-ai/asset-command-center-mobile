@@ -6,6 +6,7 @@ import { Alert, Platform, Pressable, Share, Text, TextInput, View } from 'react-
 import { crashSummaryLines, readCrashes } from '../../analytics/crash';
 import { summaryText } from '../../analytics/events';
 import { sentryConfigured } from '../../analytics/sentry';
+import { forgetInstall, newInstallId, usageServerConfigured } from '../../analytics/usage';
 import { clock } from '../../clock';
 import { INGREDIENTS, newMemory, type Goal, type Member, type Profile } from '../../engine';
 import { ensurePermission, REMINDER_TIMES, remindersSupported, syncReminders, type ReminderMeal } from '../../notifications/reminders';
@@ -18,6 +19,7 @@ import {
   Caution,
   Heading,
   Icon,
+  ChipGroup,
   MultiChipGroup,
   OptionCard,
   RadioRow,
@@ -30,6 +32,8 @@ import {
   toggleIn,
 } from '../../ui/components';
 import { ALLERGENS, BUDGETS, CONSIDERATIONS, CUISINES, DIETS, GOAL_LABEL, GOALS, STRUGGLES } from '../../ui/labels';
+import { WEEKLY_GOALS, weeksGoalReached, type WeeklyGoalKind } from '../../store/state';
+import { GOAL_OPTIONS } from '../../ui/RetentionCards';
 import { space, type, useColors } from '../../ui/theme';
 
 const DISLIKE_OPTIONS = INGREDIENTS.map((i) => ({ value: i, label: i[0].toUpperCase() + i.slice(1) }));
@@ -59,6 +63,7 @@ export default function ProfileScreen() {
   const p = state.profile;
   if (!ready) return null; // wait for saved data before deciding where to go
   if (!p) return <Redirect href="/onboarding" />;
+  const goalWeeks = weeksGoalReached(state, clock.now());
   const hiddenCount = new Set(state.history.filter((e) => e.kind === 'disliked').map((e) => e.mealId)).size;
   const update = (patch: Partial<Omit<Profile, 'createdAt'>>) => dispatch({ type: 'updateProfile', patch });
 
@@ -217,13 +222,44 @@ export default function ProfileScreen() {
         ))}
       </View>
 
+      <Heading>Weekly goal</Heading>
+      <Small>Optional. Missing a week is fine: nothing resets.</Small>
+      <ChipGroup
+        options={[...GOAL_OPTIONS.map((o) => ({ value: o.value as string, label: o.label })), { value: 'none', label: 'No goal' }]}
+        value={state.weeklyGoal?.kind ?? 'none'}
+        onChange={(k) => {
+          const kind = k === 'none' ? null : (k as WeeklyGoalKind);
+          dispatch({ type: 'setWeeklyGoal', goal: kind ? { kind, target: state.weeklyGoal?.kind === kind ? state.weeklyGoal.target : WEEKLY_GOALS[kind].target } : null });
+          if (kind) track('weekly_goal_set', { kind });
+        }}
+      />
+      {state.weeklyGoal ? (
+        <>
+          <ChipGroup
+            stretch
+            label={`How many ${WEEKLY_GOALS[state.weeklyGoal.kind].unit} a week?`}
+            options={[1, 2, 3, 4, 5].map((n) => ({ value: n, label: String(n) }))}
+            value={state.weeklyGoal.target}
+            onChange={(target) => dispatch({ type: 'setWeeklyGoal', goal: { ...state.weeklyGoal!, target } })}
+          />
+          {goalWeeks > 0 ? (
+            <Small>
+              You reached it {goalWeeks} {goalWeeks === 1 ? 'week' : 'weeks'} in the last 12. Nice.
+            </Small>
+          ) : null}
+        </>
+      ) : null}
+
       <Heading>Other considerations</Heading>
       <MultiChipGroup options={CONSIDERATIONS.filter((x) => x.value !== 'none')} value={p.considerations} onChange={(considerations) => update({ considerations })} />
 
       {remindersSupported ? (
         <>
           <Heading>Reminders</Heading>
-          <Small>Optional. One gentle nudge before the meals you choose. Off unless you turn it on.</Small>
+          <Small>
+            Optional. One gentle nudge before the meals you choose. Off unless you turn it on. If you stop opening EatOS, they pause on their own
+            after 10 days.
+          </Small>
           <MultiChipGroup
             options={(['breakfast', 'lunch', 'dinner'] as ReminderMeal[]).map((m) => ({
               value: m,
@@ -238,7 +274,7 @@ export default function ProfileScreen() {
               }
               dispatch({ type: 'setReminders', meals });
               track('reminders_changed', { count: meals.length });
-              await syncReminders(meals).catch(() => setNote('Couldn’t update reminders. Try again.'));
+              await syncReminders(meals, clock.now()).catch(() => setNote('Couldn’t update reminders. Try again.'));
             }}
           />
         </>
@@ -247,6 +283,19 @@ export default function ProfileScreen() {
       <Heading>Privacy & security</Heading>
       <View>
         {lockSupported ? <ToggleRow icon="lock-closed-outline" label="App Lock (Face ID / fingerprint)" value={state.appLock} onChange={toggleLock} /> : null}
+        {usageServerConfigured() ? (
+          <ToggleRow
+            icon="stats-chart-outline"
+            label="Share which days I open EatOS (anonymous)"
+            value={state.usageSharing.on}
+            onChange={(on) => {
+              const id = state.usageSharing.installId;
+              if (!on && id) void forgetInstall(id);
+              dispatch(on ? { type: 'setUsageSharing', on: true, installId: newInstallId() } : { type: 'setUsageSharing', on: false });
+              track('usage_sharing_changed', { on });
+            }}
+          />
+        ) : null}
         {sentryConfigured ? (
           <ToggleRow
             icon="bug-outline"
@@ -269,6 +318,17 @@ export default function ProfileScreen() {
             You marked {hiddenCount} {hiddenCount === 1 ? 'meal' : 'meals'} “Not for me”.
           </Small>
           <Button label="Show hidden meals again" variant="secondary" onPress={() => dispatch({ type: 'clearHidden' })} />
+        </>
+      ) : null}
+
+      {Platform.OS === 'ios' ? (
+        <>
+          <Heading>Ask Siri</Heading>
+          <Small>
+            Say “What should I eat?” to get a pick without opening the app: in the Shortcuts app, tap +, add “Open URLs”, paste the link below, and
+            name the shortcut “What should I eat”.
+          </Small>
+          <Button label="Share the EatOS link" variant="secondary" icon="mic-outline" onPress={() => void Share.share({ message: 'eatos://decide' })} />
         </>
       ) : null}
 

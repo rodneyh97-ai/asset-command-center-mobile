@@ -1,13 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { AppState as RNAppState } from 'react-native';
 
 import { clock } from '../clock';
 import { CRASH_KEY } from '../analytics/crash';
 import type { AnalyticsEvent, AnalyticsName } from '../analytics/events';
 import type { FeedbackKind, Feeling, MealTime, Setting } from '../engine';
 import { startCrashReporting } from '../analytics/sentry';
+import { makePing, sendPing } from '../analytics/usage';
 import { syncReminders } from '../notifications/reminders';
-import { initialState, parseStored, reducer, type Action, type AppState } from './state';
+import { daysSinceStart, initialState, parseStored, reducer, type Action, type AppState } from './state';
 
 const STORAGE_KEY = 'eatos.state.v1';
 const BACKUP_KEY = 'eatos.state.unreadable-backup';
@@ -49,7 +51,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'hydrate', state: clean });
         canPersist.current = true;
         // Re-apply reminder choices (e.g. after an OS update cleared scheduled notifications).
-        void syncReminders(clean.reminders).catch(() => {});
+        void syncReminders(clean.reminders, clock.now()).catch(() => {});
         startCrashReporting(clean.crashReports);
       } catch {
         // Read failed: run this session in memory only and leave stored data untouched.
@@ -58,6 +60,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!cancelled) {
           setReady(true);
           dispatch({ type: 'track', event: { name: 'app_open', at: clock.now().toISOString() } });
+          dispatch({ type: 'opened', at: clock.now().toISOString() });
         }
       }
     })();
@@ -65,6 +68,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Coming back from the background counts as opening the app: renew the reminder window
+  // and check for a long break. At most every 6 hours, so switching apps doesn't churn.
+  useEffect(() => {
+    if (!ready) return;
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s !== 'active') return;
+      const last = stateRef.current.lastOpenAt ? Date.parse(stateRef.current.lastOpenAt) : 0;
+      const now = clock.now();
+      if (now.getTime() - last < 6 * 60 * 60 * 1000) return;
+      dispatch({ type: 'opened', at: now.toISOString() });
+      dispatch({ type: 'track', event: { name: 'app_open', at: now.toISOString() } });
+      void syncReminders(stateRef.current.reminders, now).catch(() => {});
+    });
+    return () => sub.remove();
+  }, [ready]);
+
+  // Opt-in anonymous "opened on day N" signal; one per day, retried on the next open if offline.
+  const { on: sharing, installId, sentDays } = state.usageSharing;
+  const profileStart = state.profile?.createdAt;
+  useEffect(() => {
+    if (!ready || !sharing || !installId || !profileStart || !state.lastOpenAt) return;
+    const day = daysSinceStart(profileStart, clock.now());
+    if (sentDays.includes(day)) return;
+    let cancelled = false;
+    void sendPing(makePing(installId, day)).then((ok) => {
+      if (ok && !cancelled) dispatch({ type: 'usageSent', day });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, sharing, installId, sentDays, profileStart, state.lastOpenAt]);
 
   useEffect(() => {
     if (ready) startCrashReporting(state.crashReports);

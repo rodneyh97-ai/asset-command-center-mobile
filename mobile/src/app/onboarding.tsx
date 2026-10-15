@@ -1,4 +1,4 @@
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,20 +32,29 @@ import { ALLERGENS, BUDGETS, CONSIDERATIONS, CUISINES, DIETS, GOALS, STRUGGLES, 
 import { mealColors } from '../ui/mealArt';
 import { space, type, useColors } from '../ui/theme';
 
-const QUESTIONS = 6;
-type Step = 'welcome' | 1 | 2 | 3 | 4 | 5 | 6 | 'done';
+// Fast start: only what safety needs (allergies/diets, then medical / no-diet-talk) before the
+// first recommendation. Taste questions come later, after EatOS has already been useful ("more" mode).
+type StepId = 'restrictions' | 'considerations' | 'goal' | 'cuisines' | 'budget' | 'struggles';
+const START: StepId[] = ['restrictions', 'considerations'];
+const MORE: StepId[] = ['goal', 'cuisines', 'budget', 'struggles'];
+type Step = 'welcome' | number | 'done';
 
 export default function Onboarding() {
   const { state, ready, dispatch, track } = useStore();
   const c = useColors();
-  const [step, setStep] = useState<Step>('welcome');
-  const [goal, setGoal] = useState<Goal | null>(null);
-  const [cuisines, setCuisines] = useState<Cuisine[]>([]);
+  const params = useLocalSearchParams<{ more?: string }>();
+  // "More" only edits taste questions of an existing profile; it can never touch allergies.
+  const more = params.more === '1' && !!state.profile;
+  const steps = more ? MORE : START;
+  const p = more ? state.profile : null;
+  const [step, setStep] = useState<Step>(more ? 0 : 'welcome');
+  const [goal, setGoal] = useState<Goal | null>(p?.goal ?? null);
+  const [cuisines, setCuisines] = useState<Cuisine[]>(p?.cuisines ?? []);
   const [allergens, setAllergens] = useState<Allergen[]>([]);
   const [diets, setDiets] = useState<Diet[]>([]);
-  const [budget, setBudget] = useState<BudgetTier | null>(null);
-  const [time, setTime] = useState<TimeAvailable>(20);
-  const [struggles, setStruggles] = useState<Struggle[]>([]);
+  const [budget, setBudget] = useState<BudgetTier | null>(p?.budget ?? null);
+  const [time, setTime] = useState<TimeAvailable>(state.lastContext?.time ?? 20);
+  const [struggles, setStruggles] = useState<Struggle[]>(p?.struggles ?? []);
   const [considerations, setConsiderations] = useState<Consideration[]>([]);
 
   useEffect(() => {
@@ -54,26 +63,35 @@ export default function Onboarding() {
 
   if (!ready) return null;
   // A link to /onboarding must not let anyone overwrite an existing profile (and its allergies).
-  if (state.profile && step === 'welcome') return <Redirect href="/" />;
+  if (state.profile && step === 'welcome' && !more) return <Redirect href="/" />;
 
-  const finish = () => {
+  const finishStart = () => {
     const profile = {
-      goal: goal ?? 'eat_better',
-      struggles,
-      cuisines,
+      goal: 'eat_better' as Goal,
+      struggles: [],
+      cuisines: [],
       allergens,
       diets,
-      budget: budget ?? 2,
+      budget: 2 as BudgetTier,
       considerations: considerations.filter((x) => x !== 'none'),
       createdAt: clock.now().toISOString(),
     };
     dispatch({ type: 'completeOnboarding', profile });
-    dispatch({ type: 'setLastContext', context: { ...defaultContext(profile), time } });
+    dispatch({ type: 'setLastContext', context: defaultContext(profile) });
     track('onboarding_completed');
+    router.replace('/');
+  };
+
+  const finishMore = () => {
+    if (goal && goal !== state.profile?.goal) track('goal_changed');
+    dispatch({ type: 'updateProfile', patch: { goal: goal ?? 'eat_better', cuisines, budget: budget ?? 2, struggles } });
+    if (state.lastContext) dispatch({ type: 'setLastContext', context: { ...state.lastContext, time, budget: budget ?? 2 } });
+    dispatch({ type: 'setupDone' });
+    track('setup_completed');
     setStep('done');
   };
 
-  // ---------- 1. Splash ----------
+  // ---------- Splash ----------
   if (step === 'welcome') {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: c.hero, overflow: 'hidden' }}>
@@ -86,9 +104,9 @@ export default function Onboarding() {
             </Text>
           </View>
           <View style={{ gap: space.lg }}>
-            <Button label="Get Started" variant="accent" big iconRight="arrow-forward" onPress={() => setStep(1)} />
+            <Button label="Get Started" variant="accent" big iconRight="arrow-forward" onPress={() => setStep(0)} />
             <Text style={[type.small, { color: c.heroMuted, textAlign: 'center' }]}>
-              A personal food operating system{'\n'}for real life.
+              Two quick questions, then your first pick.
             </Text>
           </View>
         </View>
@@ -96,7 +114,7 @@ export default function Onboarding() {
     );
   }
 
-  // ---------- 6. Finish ----------
+  // ---------- Finish (after the optional taste questions) ----------
   if (step === 'done') {
     return (
       <Screen footer={<Button label="Go to Home" big iconRight="arrow-forward" onPress={() => router.replace('/')} />}>
@@ -112,33 +130,36 @@ export default function Onboarding() {
         <View style={[styles.checklist, { backgroundColor: c.surface, borderColor: c.border }]}>
           <CheckRow text="Your goal is saved" />
           <CheckRow text="Your preferences are set" />
-          <CheckRow text={allergens.length + diets.length > 0 ? 'Restrictions are active' : 'No restrictions to apply'} />
           <CheckRow text="Personalized recommendations are ready" />
         </View>
       </Screen>
     );
   }
 
-  const n = step;
-  const back = () => setStep(n === 1 ? 'welcome' : ((n - 1) as Step));
-  const next = () => (n === QUESTIONS ? finish() : setStep((n + 1) as Step));
-  const canContinue = n === 1 ? goal !== null : n === 4 ? budget !== null : true;
+  const i = step;
+  const id = steps[i];
+  const last = i === steps.length - 1;
+  const back = () => (i === 0 ? (more ? router.back() : setStep('welcome')) : setStep(i - 1));
+  const next = () => (last ? (more ? finishMore() : finishStart()) : setStep(i + 1));
+  const canContinue = id === 'goal' ? goal !== null : id === 'budget' ? budget !== null : true;
   const nextLabel =
-    n === 2 && cuisines.length === 0
+    id === 'cuisines' && cuisines.length === 0
       ? 'Skip'
-      : n === 3 && allergens.length + diets.length === 0
+      : id === 'restrictions' && allergens.length + diets.length === 0
         ? 'None — Next'
-        : n === 5 && struggles.length === 0
+        : id === 'struggles' && struggles.length === 0
           ? 'Skip'
-          : n === QUESTIONS
-            ? 'Finish'
+          : last
+            ? more
+              ? 'Finish'
+              : 'Show my first pick'
             : 'Next';
 
   return (
     <Screen footer={<Button label={nextLabel} big iconRight="arrow-forward" onPress={next} disabled={!canContinue} />}>
-      <ProgressHeader step={n} total={QUESTIONS} onBack={back} />
+      <ProgressHeader step={i + 1} total={steps.length} onBack={back} />
 
-      {n === 1 && (
+      {id === 'goal' && (
         <>
           <Header title="What’s your main goal?" subtitle="This helps EatOS give you better recommendations. It stays put until you change it." />
           {GOALS.map((g) => (
@@ -147,7 +168,7 @@ export default function Onboarding() {
         </>
       )}
 
-      {n === 2 && (
+      {id === 'cuisines' && (
         <>
           <Header title="What foods do you enjoy?" subtitle="Select as many as you like." />
           <View style={{ gap: space.md }}>
@@ -172,7 +193,7 @@ export default function Onboarding() {
         </>
       )}
 
-      {n === 3 && (
+      {id === 'restrictions' && (
         <>
           <Header title="Any dietary restrictions?" subtitle="We’ll keep these in mind always. Allergies are strict rules, never just preferences." />
           <View>
@@ -207,7 +228,7 @@ export default function Onboarding() {
         </>
       )}
 
-      {n === 4 && (
+      {id === 'budget' && (
         <>
           <Header title="What’s your typical budget per meal?" subtitle="This helps with realistic options." />
           <View style={{ gap: space.sm }} accessibilityRole="radiogroup" accessibilityLabel="Budget per meal">
@@ -219,14 +240,14 @@ export default function Onboarding() {
         </>
       )}
 
-      {n === 5 && (
+      {id === 'struggles' && (
         <>
           <Header title="What usually makes eating well hard?" subtitle="Pick any that sound familiar. This is where EatOS should help most." />
           <MultiChipGroup options={STRUGGLES} value={struggles} onChange={setStruggles} />
         </>
       )}
 
-      {n === 6 && (
+      {id === 'considerations' && (
         <>
           <Header title="Anything else EatOS should keep in mind?" />
           <MultiChipGroup options={CONSIDERATIONS} value={considerations} onChange={setConsiderations} exclusive="none" />

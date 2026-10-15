@@ -1,12 +1,14 @@
 // Pure app-state logic (no React, no storage) so it can be unit-tested.
-import { CATALOG, safetyCheck, type Context, type FeedbackEvent, type FeedbackKind, type Feeling, type MealIdea, type MealTime, type Profile, type Setting } from '../engine';
+import { CATALOG, inferredTaste, safetyCheck, type Context, type FeedbackEvent, type FeedbackKind, type Feeling, type MealIdea, type MealTime, type Profile, type Setting } from '../engine';
 import { combineProfiles, sanitizeMembers, type Member } from '../engine/household';
-import { activeMemories, dislikedFoodIn, sanitizeMemories, upsertMemory, type Memory } from '../engine/memory';
+import { activeMemories, dislikedFoodIn, sanitizeMemories, upsertMemory, valuesOf, type Memory } from '../engine/memory';
 import { isSaved } from '../engine/recommend';
 import { sanitizeContext, sanitizeFeedback, sanitizeProfile, VALID } from '../engine/validate';
 import type { AnalyticsEvent } from '../analytics/events';
 
 export const SCHEMA_VERSION = 1;
+const DAY_MS = 24 * 60 * 60 * 1000;
+export const WELCOME_BACK_DAYS = 10;
 const MAX_HISTORY = 1000;
 const MAX_ANALYTICS = 2000;
 
@@ -43,12 +45,37 @@ export interface AppState {
   questions: { done: Record<string, string>; lastShownAt: string | null };
   /** Weekly reflection: when it last happened / was snoozed until. */
   checkin: { lastAt: string | null; snoozeUntil: string | null };
+  /** The optional taste questions (goal, foods, budget, what gets in the way) asked after the first meal. */
+  setup: { done: boolean; snoozeUntil: string | null };
+  /** Opt-in anonymous "which days was EatOS opened" signal. Off by default; the id is created only on opt-in. */
+  usageSharing: { on: boolean; asked: boolean; installId: string | null; sentDays: number[] };
+  /** Optional, forgiving weekly goal. Nothing resets and nothing is "missed": a new week just starts. */
+  weeklyGoal: WeeklyGoal | null;
+  weeklyGoalAsked: boolean;
+  /** Last time the app was opened (for the welcome-back message). */
+  lastOpenAt: string | null;
+  /** This session only: the user is back after a long break. Never persisted. */
+  welcomeBack: boolean;
+  /** When the app-store rating prompt was shown (max 3, at least 120 days apart). */
+  reviewPrompts: string[];
   /**
    * Raw stored data we couldn't read (newer app version, corruption). Never persisted
    * as state; the provider copies it to a backup key before anything overwrites it.
    */
   unreadable?: string;
 }
+
+export type WeeklyGoalKind = 'cook_home' | 'eat_together' | 'try_new' | 'decide';
+export interface WeeklyGoal {
+  kind: WeeklyGoalKind;
+  target: number;
+}
+export const WEEKLY_GOALS: Record<WeeklyGoalKind, { label: string; unit: string; target: number }> = {
+  cook_home: { label: 'Eat at home more', unit: 'meals at home', target: 3 },
+  eat_together: { label: 'Eat together', unit: 'meals together', target: 2 },
+  try_new: { label: 'Try something new', unit: 'new meals', target: 1 },
+  decide: { label: 'Less stress at mealtimes', unit: 'meals decided', target: 4 },
+};
 
 export interface MealPlan {
   mealId: string;
@@ -76,6 +103,13 @@ export const initialState: AppState = {
   sessionUnlockedAt: null,
   premiumInterest: false,
   checkin: { lastAt: null, snoozeUntil: null },
+  setup: { done: false, snoozeUntil: null },
+  usageSharing: { on: false, asked: false, installId: null, sentDays: [] },
+  weeklyGoal: null,
+  weeklyGoalAsked: false,
+  lastOpenAt: null,
+  welcomeBack: false,
+  reviewPrompts: [],
 };
 
 export type Action =
@@ -105,14 +139,27 @@ export type Action =
   | { type: 'unlocked'; at: number }
   | { type: 'setPremiumInterest'; on: boolean }
   | { type: 'checkinDone'; at: string }
-  | { type: 'checkinSnooze'; until: string };
+  | { type: 'checkinSnooze'; until: string }
+  | { type: 'setupDone' }
+  | { type: 'setupSnooze'; until: string }
+  | { type: 'setUsageSharing'; on: boolean; installId?: string }
+  | { type: 'usageSent'; day: number }
+  | { type: 'setWeeklyGoal'; goal: WeeklyGoal | null }
+  | { type: 'opened'; at: string }
+  | { type: 'dismissWelcomeBack' }
+  | { type: 'reviewPrompted'; at: string };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'hydrate':
       return action.state;
     case 'completeOnboarding':
-      return { ...state, profile: action.profile, lastContext: state.lastContext ?? defaultContext(action.profile) };
+      return {
+        ...state,
+        profile: action.profile,
+        lastContext: state.lastContext ?? defaultContext(action.profile),
+        setup: { done: false, snoozeUntil: null },
+      };
     case 'updateProfile':
       if (!state.profile) return state;
       return { ...state, profile: { ...state.profile, ...action.patch } };
@@ -194,6 +241,33 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, checkin: { ...state.checkin, snoozeUntil: action.until } };
     case 'clearHidden':
       return { ...state, history: state.history.filter((e) => e.kind !== 'disliked') };
+    case 'setupDone':
+      return { ...state, setup: { done: true, snoozeUntil: null } };
+    case 'setupSnooze':
+      return { ...state, setup: { ...state.setup, snoozeUntil: action.until } };
+    case 'setUsageSharing':
+      return {
+        ...state,
+        usageSharing: action.on
+          ? { on: true, asked: true, installId: action.installId ?? state.usageSharing.installId, sentDays: state.usageSharing.sentDays }
+          : // Turning it off forgets the anonymous id, so nothing on this phone links to old pings.
+            { on: false, asked: true, installId: null, sentDays: [] },
+      };
+    case 'usageSent':
+      return {
+        ...state,
+        usageSharing: { ...state.usageSharing, sentDays: [...new Set([...state.usageSharing.sentDays, action.day])].slice(-120) },
+      };
+    case 'setWeeklyGoal':
+      return { ...state, weeklyGoal: action.goal, weeklyGoalAsked: true };
+    case 'opened': {
+      const gap = state.lastOpenAt ? Date.parse(action.at) - Date.parse(state.lastOpenAt) : 0;
+      return { ...state, lastOpenAt: action.at, welcomeBack: !!state.profile && gap >= WELCOME_BACK_DAYS * DAY_MS };
+    }
+    case 'dismissWelcomeBack':
+      return { ...state, welcomeBack: false };
+    case 'reviewPrompted':
+      return { ...state, reviewPrompts: [...state.reviewPrompts, action.at].slice(-3) };
   }
 }
 
@@ -250,7 +324,45 @@ export function parseStored(raw: string | null): AppState {
     sessionUnlockedAt: null,
     premiumInterest: d.premiumInterest === true,
     checkin: sanitizeCheckin(d.checkin),
+    setup: sanitizeSetup(d.setup, !!profile),
+    usageSharing: sanitizeUsage(d.usageSharing),
+    weeklyGoal: sanitizeWeeklyGoal(d.weeklyGoal),
+    weeklyGoalAsked: d.weeklyGoalAsked === true,
+    lastOpenAt: isDate(d.lastOpenAt) ? (d.lastOpenAt as string) : null,
+    welcomeBack: false,
+    reviewPrompts: Array.isArray(d.reviewPrompts) ? d.reviewPrompts.filter(isDate).slice(-3) : [],
   };
+}
+
+const isDate = (v: unknown): v is string => typeof v === 'string' && v.length <= 40 && !Number.isNaN(Date.parse(v));
+
+function sanitizeSetup(raw: unknown, hasProfile: boolean): AppState['setup'] {
+  // Profiles from before the short onboarding answered every question already.
+  if (!raw || typeof raw !== 'object') return { done: hasProfile, snoozeUntil: null };
+  const r = raw as Record<string, unknown>;
+  return { done: r.done === true, snoozeUntil: isDate(r.snoozeUntil) ? r.snoozeUntil : null };
+}
+
+function sanitizeUsage(raw: unknown): AppState['usageSharing'] {
+  const off = { on: false, asked: false, installId: null, sentDays: [] };
+  if (!raw || typeof raw !== 'object') return off;
+  const r = raw as Record<string, unknown>;
+  const id = typeof r.installId === 'string' && /^[0-9a-f-]{36}$/.test(r.installId) ? r.installId : null;
+  const on = r.on === true && !!id;
+  return {
+    on,
+    asked: r.asked === true,
+    installId: on ? id : null,
+    sentDays: on && Array.isArray(r.sentDays) ? r.sentDays.filter((n): n is number => Number.isInteger(n) && n >= 0 && n <= 3650).slice(-120) : [],
+  };
+}
+
+function sanitizeWeeklyGoal(raw: unknown): WeeklyGoal | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (!(typeof r.kind === 'string' && Object.prototype.hasOwnProperty.call(WEEKLY_GOALS, r.kind))) return null;
+  if (!Number.isInteger(r.target) || (r.target as number) < 1 || (r.target as number) > 5) return null;
+  return { kind: r.kind as WeeklyGoalKind, target: r.target as number };
 }
 
 function sanitizeQuestions(raw: unknown): AppState['questions'] {
@@ -419,4 +531,97 @@ export function whenLabel(e: FeedbackEvent, now: Date): string {
   if (days === 1) return meal === 'dinner' ? 'Last night' : meal ? `Yesterday, ${meal}` : 'Yesterday';
   const day = d.toLocaleDateString('en-US', { weekday: 'short' });
   return days < 7 ? `${day}${meal ? ` ${meal}` : ''}` : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// ---------- Retention helpers (all optional, all guilt-free) ----------
+
+const acceptedCount = (history: FeedbackEvent[]) => history.filter((e) => e.kind === 'accepted').length;
+
+/** The taste questions are offered once EatOS has already been useful (after the first meal). */
+export function setupDue(state: AppState, now: Date): boolean {
+  if (!state.profile || state.setup.done || acceptedCount(state.history) < 1) return false;
+  return !state.setup.snoozeUntil || now.getTime() >= Date.parse(state.setup.snoozeUntil);
+}
+
+/** Asked once, only if a server is configured, after the first meal. */
+export function usageAskDue(state: AppState, serverConfigured: boolean): boolean {
+  return serverConfigured && !!state.profile && !state.usageSharing.asked && acceptedCount(state.history) >= 1;
+}
+
+/** Offer a weekly goal once someone has used EatOS a few times. */
+export function weeklyGoalAskDue(state: AppState): boolean {
+  return !!state.profile && !state.weeklyGoal && !state.weeklyGoalAsked && acceptedCount(state.history) >= 3;
+}
+
+/** Monday 00:00 local time of the week containing `now`. */
+export function weekStart(now: Date): Date {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d;
+}
+
+/** Meals in [from, to) that count toward a weekly goal. */
+function goalCount(history: FeedbackEvent[], kind: WeeklyGoalKind, from: number, to: number): number {
+  const seenBefore = new Set<string>();
+  let n = 0;
+  for (const e of history) {
+    if (e.kind !== 'accepted') continue;
+    const t = Date.parse(e.at);
+    const isNew = !seenBefore.has(e.mealId) && e.mealId !== OTHER_MEAL;
+    seenBefore.add(e.mealId);
+    if (t < from || t >= to) continue;
+    if (kind === 'decide' || (kind === 'cook_home' && e.setting === 'home') || (kind === 'eat_together' && e.with?.length) || (kind === 'try_new' && isNew)) n++;
+  }
+  return n;
+}
+
+export function weekProgress(state: AppState, now: Date): { count: number; target: number; done: boolean } | null {
+  if (!state.weeklyGoal) return null;
+  const from = weekStart(now).getTime();
+  const count = goalCount(state.history, state.weeklyGoal.kind, from, from + 7 * DAY_MS);
+  return { count, target: state.weeklyGoal.target, done: count >= state.weeklyGoal.target };
+}
+
+/** Weeks (of the last 12 completed ones) where the goal was reached. Only ever shown as a positive. */
+export function weeksGoalReached(state: AppState, now: Date): number {
+  if (!state.weeklyGoal) return 0;
+  const thisWeek = weekStart(now);
+  let n = 0;
+  for (let w = 1; w <= 12; w++) {
+    const from = new Date(thisWeek.getFullYear(), thisWeek.getMonth(), thisWeek.getDate() - 7 * w).getTime();
+    const to = new Date(thisWeek.getFullYear(), thisWeek.getMonth(), thisWeek.getDate() - 7 * (w - 1)).getTime();
+    if (goalCount(state.history, state.weeklyGoal.kind, from, to) >= state.weeklyGoal.target) n++;
+  }
+  return n;
+}
+
+/**
+ * Ask for an app-store rating only after real, good experiences: 3+ meals, at least one
+ * "loved", 3+ days in, never twice within 120 days, at most 3 times ever.
+ */
+export function reviewDue(state: AppState, now: Date): boolean {
+  if (!state.profile || state.reviewPrompts.length >= 3) return false;
+  if (acceptedCount(state.history) < 3 || !state.history.some((e) => e.kind === 'loved')) return false;
+  if (now.getTime() - Date.parse(state.profile.createdAt) < 3 * DAY_MS) return false;
+  const last = state.reviewPrompts[state.reviewPrompts.length - 1];
+  return !last || now.getTime() - Date.parse(last) >= 120 * DAY_MS;
+}
+
+/** Whole local days since the profile was created (day 0 = install day). */
+export function daysSinceStart(createdAt: string, now: Date): number {
+  const a = new Date(createdAt);
+  const start = new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.max(0, Math.round((today - start) / DAY_MS));
+}
+
+/** How many things EatOS knows about the user: their own memories plus open guesses ("What EatOS knows"). */
+export function learnedCount(state: AppState, now: Date): number {
+  const mine = activeMemories(state.memories, now, ['me']);
+  const rejected = new Set(valuesOf(mine, 'not_true'));
+  const confirmed = new Set(valuesOf(mine, 'confirmed_trait'));
+  const guesses = state.personalization.learnFromBehavior
+    ? inferredTaste(state.history, CATALOG, now).filter((g) => !rejected.has(g.trait) && !confirmed.has(g.trait)).length
+    : 0;
+  return mine.filter((m) => m.topic !== 'not_true').length + guesses;
 }

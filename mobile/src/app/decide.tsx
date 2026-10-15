@@ -6,7 +6,8 @@ import { clock } from '../clock';
 import { isSaved, mealTimeFor, recommend, swapsFor, type BudgetTier, type MealIdea, type Recommendation } from '../engine';
 import { useActiveProfile } from '../store/useActiveProfile';
 import { useStore } from '../store/AppProvider';
-import { defaultContext, eatingWithNames, memoriesNow, nextMealSlot } from '../store/state';
+import { askForReview } from '../analytics/review';
+import { defaultContext, eatingWithNames, memoriesNow, nextMealSlot, reviewDue } from '../store/state';
 import {
   Body,
   Button,
@@ -99,6 +100,16 @@ export default function Decide() {
         feeling: state.personalization.trackMood ? ctx.feeling : undefined,
       });
       track('recommendation_accepted', { msSinceStart: t - startedAt, rank: shown.indexOf(r), wasNew: !!r.isNew });
+      // A good moment to ask for a rating: right after deciding, only for people who've loved meals.
+      if (reviewDue(state, clock.now())) {
+        setTimeout(() => {
+          void askForReview().then((asked) => {
+            if (!asked) return;
+            dispatch({ type: 'reviewPrompted', at: clock.now().toISOString() });
+            track('review_prompted');
+          });
+        }, 1500);
+      }
     }
     setChosen(r);
     setChosenAt(t);

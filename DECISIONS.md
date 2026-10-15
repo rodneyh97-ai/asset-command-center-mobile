@@ -61,3 +61,13 @@ Risk: someone with a severe allergy may still choose a cross-contact meal. Every
 
 
 **D19 — Food and place library from public data only.** 2026-10-15. Sources: USDA FoodData Central (public domain: generic foods with lab nutrients, plus branded labels), Open Food Facts (ODbL: US grocery products, label allergens and "may contain" traces), OpenStreetMap (ODbL: restaurants, cafes, fast food, grocery and convenience stores). Rules: every row keeps its source; attribution from `data_sources` is shown in the app; only USDA generic foods count as verified; an empty allergen list is *unknown*, never "free of"; "may contain" is stored separately and treated like the app's existing may-contain tier. **Public data has no restaurant menus, dish prices or hours we can trust** — restaurants appear as places ("Joe's Tacos, Mexican, 0.4 mi"), and EatOS keeps suggesting dish patterns rather than claiming a specific menu item exists. ODbL means any database we publish that is derived from OFF/OSM must stay under ODbL; using it inside the app is fine with attribution.
+
+**D20 — Retention pack, no dark patterns.** 2026-10-15.
+- **Two-question start.** Onboarding asks only allergies/diet and the medical / "no diet talk" question, then goes straight to Home. Goal, foods, budget and "what gets in the way" are offered after the first meal (one card, "Later" hides it for 2 days). Safety questions stay first; the shortcut link can't skip them.
+- **Anonymous retention signal (opt-in, default off).** Asked once after the first meal, only when a server is configured. Sends `(random id, day N, platform, version)`; opt-out deletes server rows and the id. Admins see day-1/7/30 percentages only (`retention_metrics()`). Anyone holding the public key could insert fake pings; acceptable for a 20-person test, revisit before public launch.
+- **Reminders pause themselves.** Scheduled 10 days ahead and renewed on each open; someone who stops using EatOS gets one "reminders paused" note, then nothing.
+- **Welcome back** after 10+ days away: "No catching up needed", one tap to a pick.
+- **Forgiving weekly goal** (optional) instead of streaks: nothing resets, past weeks only count when reached.
+- **Visible learning:** "EatOS has learned N things about you" → What EatOS knows (editable, deletable).
+- **Store rating prompt:** only after 3+ meals, at least one "Loved it", 3+ days in; ≥120 days apart, max 3.
+- **Not done:** home-screen quick action / widget (the only quick-action package is unofficial and untested on this Expo version; a widget needs native code that can't be built here). iPhone users can make a Siri shortcut to `eatos://decide` (instructions in Profile). Partner invite across phones needs the server.

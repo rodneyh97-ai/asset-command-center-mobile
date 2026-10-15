@@ -10,7 +10,7 @@ jest.mock('expo-notifications', () => ({
   scheduleNotificationAsync: jest.fn(async () => 'id'),
   setNotificationChannelAsync: jest.fn(async () => null),
   AndroidImportance: { DEFAULT: 3 },
-  SchedulableTriggerInputTypes: { DAILY: 'daily' },
+  SchedulableTriggerInputTypes: { DAILY: 'daily', DATE: 'date' },
 }));
 
 jest.mock('@sentry/react-native', () => {
@@ -27,3 +27,13 @@ jest.mock('expo-local-authentication', () => ({
   getEnrolledLevelAsync: jest.fn(async () => 3),
   authenticateAsync: jest.fn(async () => ({ success: true })),
 }));
+
+jest.mock('expo-store-review', () => ({
+  isAvailableAsync: jest.fn(async () => true),
+  requestReview: jest.fn(async () => {}),
+}));
+
+jest.mock('expo-crypto', () => {
+  let n = 0;
+  return { randomUUID: jest.fn(() => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`) };
+});

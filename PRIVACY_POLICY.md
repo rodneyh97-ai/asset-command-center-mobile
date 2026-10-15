@@ -6,7 +6,7 @@
 _Last updated: [DATE]_
 
 ## The short version
-EatOS keeps your information **on your device**. We don't have servers that receive it, we don't sell it, and we don't use it for advertising.
+EatOS keeps your information **on your device**. The only things that can leave it are an anonymous "which days was the app opened" signal if you agree to it, and anonymous crash reports. We don't sell anything, and we don't use it for advertising.
 
 ## What EatOS stores on your device
 - Your answers from setup: goal, what makes eating hard, foods you like, allergies, diet, budget, and other considerations you choose.
@@ -14,6 +14,7 @@ EatOS keeps your information **on your device**. We don't have servers that rece
 - Basic usage counts (for example, how many suggestions you accepted) and error reports if the app crashes.
 
 ## What leaves your device
+- **Which days you open EatOS (only if you say yes).** After your first meal, EatOS may ask once whether to share this. If you agree, it sends "opened on day N" with a random code created on your phone, plus the app version and whether it's iPhone, Android or web. Nothing else: no food, health, profile, location, or device identifiers. Turning it off in Preferences → Privacy & security deletes everything sent under that code and throws the code away.
 - **Crash reports (if enabled by us and not switched off by you).** If EatOS crashes, an anonymous error report may be sent to our crash-reporting server: the error message, app version, and phone model/OS version. It never includes your name, email, allergies, diet, goals, meal choices, or a record of what you tapped. You can turn this off in Preferences → Your data.
 - **Usage summary, only if you share it.** If you tap **Share my usage summary**, your phone's share sheet opens with a text summary of counts and recent error messages. It contains **no allergies, diets, goals, or meal choices**. You choose whether and with whom to share it.
 - Nothing else. Your preferences, history, plans, and check-in answers stay on your device.

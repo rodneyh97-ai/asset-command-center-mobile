@@ -1,5 +1,7 @@
 // Optional, user-controlled meal reminders. Local notifications only: nothing goes
 // through a server. Off by default; permission is requested only when turned on.
+// Reminders are scheduled only WINDOW_DAYS ahead and renewed whenever the app opens, so
+// someone who stops using EatOS gets one "paused" note and then silence — never daily nagging.
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
@@ -16,6 +18,12 @@ const COPY: Record<ReminderMeal, { title: string; body: string }> = {
   breakfast: { title: 'Breakfast in a bit?', body: 'Tap for one quick idea.' },
   lunch: { title: 'Lunch soon?', body: 'Get a good option in a few taps.' },
   dinner: { title: 'Thinking about dinner?', body: 'Let EatOS make the call.' },
+};
+
+export const WINDOW_DAYS = 10;
+export const PAUSED_COPY = {
+  title: 'Meal reminders paused',
+  body: 'Looks like a busy stretch, so we paused them. Open EatOS anytime for a quick idea.',
 };
 
 export const remindersSupported = Platform.OS === 'ios' || Platform.OS === 'android';
@@ -44,8 +52,25 @@ export async function ensurePermission(): Promise<boolean> {
   return asked.granted;
 }
 
-/** Makes scheduled reminders exactly match the user's choices. */
-export async function syncReminders(meals: ReminderMeal[]): Promise<void> {
+/** The exact reminder times for the next WINDOW_DAYS, plus when the single "paused" note goes out. */
+export function reminderPlan(meals: ReminderMeal[], now: Date): { reminders: { meal: ReminderMeal; at: Date }[]; pausedAt: Date | null } {
+  if (meals.length === 0) return { reminders: [], pausedAt: null };
+  const order: ReminderMeal[] = ['breakfast', 'lunch', 'dinner'];
+  const chosen = order.filter((m) => meals.includes(m));
+  const reminders: { meal: ReminderMeal; at: Date }[] = [];
+  for (let d = 0; d < WINDOW_DAYS; d++) {
+    for (const meal of chosen) {
+      const t = REMINDER_TIMES[meal];
+      const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d, t.hour, t.minute);
+      if (at > now) reminders.push({ meal, at });
+    }
+  }
+  const last = REMINDER_TIMES[chosen[chosen.length - 1]];
+  return { reminders, pausedAt: new Date(now.getFullYear(), now.getMonth(), now.getDate() + WINDOW_DAYS, last.hour, last.minute) };
+}
+
+/** Makes scheduled reminders exactly match the user's choices, starting from now. */
+export async function syncReminders(meals: ReminderMeal[], now: Date = new Date()): Promise<void> {
   if (!remindersSupported) return;
   ensureHandler();
   await Notifications.cancelAllScheduledNotificationsAsync();
@@ -56,16 +81,18 @@ export async function syncReminders(meals: ReminderMeal[]): Promise<void> {
       importance: Notifications.AndroidImportance.DEFAULT,
     });
   }
-  for (const meal of meals) {
-    const t = REMINDER_TIMES[meal];
+  const channel = Platform.OS === 'android' ? { channelId: 'meal-reminders' } : {};
+  const plan = reminderPlan(meals, now);
+  for (const r of plan.reminders) {
     await Notifications.scheduleNotificationAsync({
-      content: { ...COPY[meal], data: { url: '/' } },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: t.hour,
-        minute: t.minute,
-        ...(Platform.OS === 'android' ? { channelId: 'meal-reminders' } : {}),
-      },
+      content: { ...COPY[r.meal], data: { url: '/' } },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: r.at, ...channel },
+    });
+  }
+  if (plan.pausedAt) {
+    await Notifications.scheduleNotificationAsync({
+      content: { ...PAUSED_COPY, data: { url: '/' } },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: plan.pausedAt, ...channel },
     });
   }
 }

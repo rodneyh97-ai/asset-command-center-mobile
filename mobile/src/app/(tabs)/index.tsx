@@ -9,6 +9,10 @@ import { useStore } from '../../store/AppProvider';
 import {
   checkinDue,
   lastMeals,
+  learnedCount,
+  setupDue,
+  usageAskDue,
+  weeklyGoalAskDue,
   whenLabel,
   memoriesNow,
   defaultContext,
@@ -19,7 +23,9 @@ import {
   weeklyReflection,
   type SavedContext,
 } from '../../store/state';
+import { usageServerConfigured } from '../../analytics/usage';
 import { WeeklyCheckIn } from '../../ui/CheckIn';
+import { LearnedLine, SetupCard, UsageAskCard, WeeklyGoalAsk, WeeklyGoalProgress, WelcomeBack } from '../../ui/RetentionCards';
 import { QuestionCard } from '../../ui/QuestionCard';
 import {
   Body,
@@ -90,11 +96,19 @@ export default function Home() {
   // Favorites are saved meals not already shown in "Your last meals".
   const favorites = quickPicks.filter((q) => q.saved && !recent.some((e) => e.mealId === q.meal.id)).slice(0, 3);
 
-  // At most one card asking something of the user at a time.
-  const question =
-    !pendingMeal && !checkinShown && !(state.plan && planStatus(state.plan, now) === 'due')
-      ? nextQuestion(state.questions, state.profile!.createdAt, now)
-      : null;
+  // At most one card asking something of the user at a time, most useful first.
+  const free = !pendingMeal && !checkinShown && !(state.plan && planStatus(state.plan, now) === 'due') && !confirmation;
+  const ask = !free
+    ? null
+    : setupDue(state, now)
+      ? 'setup'
+      : usageAskDue(state, usageServerConfigured())
+        ? 'usage'
+        : weeklyGoalAskDue(state)
+          ? 'goal'
+          : null;
+  const question = free && !ask ? nextQuestion(state.questions, state.profile!.createdAt, now) : null;
+  const learned = learnedCount(state, now);
   const preferredName = valuesOf(state.memories.filter((m) => m.subject === 'me'), 'preferred_name')[0];
 
   const decide = () => {
@@ -162,7 +176,11 @@ export default function Home() {
           {preferredName ? ` · Hi, ${preferredName}` : ''}
         </Small>
         <Title>What should I eat?</Title>
+        {learned >= 3 ? <LearnedLine count={learned} /> : null}
       </View>
+
+      {state.welcomeBack ? <WelcomeBack onDecide={decide} /> : null}
+      {state.weeklyGoal ? <WeeklyGoalProgress /> : null}
 
       {plan && planMeal && planDue ? (
         <Card>
@@ -278,6 +296,9 @@ export default function Home() {
           }}
         />
       ) : null}
+
+      {/* Right under the main action, so it's seen without scrolling past history. */}
+      {ask === 'setup' ? <SetupCard /> : ask === 'usage' ? <UsageAskCard /> : ask === 'goal' ? <WeeklyGoalAsk /> : null}
 
       {recent.length > 0 ? (
         <View style={{ gap: space.sm }}>
