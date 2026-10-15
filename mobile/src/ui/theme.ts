@@ -29,7 +29,7 @@ const light = {
   cautionBg: '#FFF3DC',
   cautionText: '#6B4300',
   danger: '#A12A2A',
-  tabInactive: '#7B847D',
+  tabInactive: '#59625B',
 };
 
 const dark: typeof light = {

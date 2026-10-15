@@ -209,8 +209,9 @@ function scoreMeal(
   // Taste
   if (profile.cuisines.includes(meal.cuisine)) add(2, 'Matches food you enjoy');
 
-  // Meal time
+  // Meal time. A snack-only idea is not a real lunch or dinner unless the user is only a little hungry.
   if (meal.mealTimes.includes(ctx.mealTime)) add(2, '');
+  else if (ctx.mealTime !== 'snack' && meal.mealTimes.every((t) => t === 'snack') && ctx.hunger !== 'light') add(-10, '');
   else add(-4, '');
 
   // Hunger

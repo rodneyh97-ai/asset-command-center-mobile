@@ -24,6 +24,10 @@ npm run typecheck
 npm run lint
 ```
 
+## Screens
+
+`screens/eatos-screens-light.png` and `screens/eatos-screens-dark.png` show every screen, captured from the real build.
+
 ## Docs
 
 | File | Purpose |

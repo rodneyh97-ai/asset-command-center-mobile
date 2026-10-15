@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
   type StyleProp,
@@ -366,7 +365,7 @@ export function ImageChoiceTile({
   );
 }
 
-/** Row with icon, label and a switch (restrictions screen). */
+/** Row with icon, label and an on/off toggle (restrictions screen). One control, fully labelled. */
 export function ToggleRow({
   icon,
   label,
@@ -383,14 +382,20 @@ export function ToggleRow({
     <Pressable
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
+      aria-checked={value}
       accessibilityLabel={label}
       onPress={() => onChange(!value)}
       style={[styles.listRow, { borderBottomColor: c.border }]}
     >
       <Icon name={icon} size={20} color={c.primary} />
       <Text style={[type.body, { color: c.ink, flex: 1 }]}>{label}</Text>
-      <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Switch value={value} trackColor={{ false: c.border, true: c.brandGreen }} thumbColor="#FFFFFF" />
+      {/* Visual-only toggle; the whole row is the control. */}
+      <View
+        style={[styles.toggleTrack, { backgroundColor: value ? c.brandGreen : c.border }]}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <View style={[styles.toggleThumb, { alignSelf: value ? 'flex-end' : 'flex-start' }]} />
       </View>
     </Pressable>
   );
@@ -403,6 +408,7 @@ export function RadioRow({ label, selected, onPress }: { label: string; selected
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
+      aria-checked={selected}
       accessibilityLabel={label}
       onPress={onPress}
       style={({ pressed }) => [
@@ -677,5 +683,7 @@ const styles = StyleSheet.create({
   tag: { paddingHorizontal: space.sm, paddingVertical: 4, borderRadius: radius.pill },
   statCard: { flex: 1, alignItems: 'center', gap: 2, padding: space.md, borderRadius: radius.lg, borderWidth: 1 },
   navRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 52, paddingHorizontal: space.md, borderRadius: radius.md, borderWidth: 1 },
+  toggleTrack: { width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center' },
+  toggleThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#FFFFFF' },
   progressTrack: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
 });

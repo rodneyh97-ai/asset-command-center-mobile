@@ -225,6 +225,16 @@ describe('situation fit', () => {
     }
   });
 
+  it('never makes a snack the main pick for lunch or dinner unless the user is only a little hungry', () => {
+    for (const setting of ['home', 'takeout', 'restaurant', 'work', 'on_the_go'] as Setting[])
+      for (const mealTime of ['lunch', 'dinner'] as MealTime[])
+        for (const goal of ['lose_weight', 'build_muscle', 'eat_better'] as const)
+          for (const feeling of ['tired', 'fine'] as Feeling[]) {
+            const r = recommend(profile({ goal, cuisines: ['asian'] }), ctx({ setting, mealTime, feeling, budget: 1 }), { now: NOW });
+            if (r.primary) expect({ id: r.primary.meal.id, ok: r.primary.meal.mealTimes.some((t) => t !== 'snack') }).toEqual({ id: r.primary.meal.id, ok: true });
+          }
+  });
+
   it('returns at most two alternatives, none duplicating the primary', () => {
     const r = recommend(profile(), ctx(), { now: NOW });
     expect(r.alternatives.length).toBeLessThanOrEqual(2);

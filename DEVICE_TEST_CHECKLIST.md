@@ -33,7 +33,13 @@ Everything below **cannot be tested from the cloud**. Run it on at least one iPh
 - [ ] Turn reminders off → no more reminders
 - [ ] Use EatOS for a week → a "Weekly check-in" card appears; **Not now** hides it
 
-## 6. Edge cases
+## 6. App Lock (needs a real phone — can't be tested in the cloud)
+- [ ] Profile → Privacy & security → **App Lock** → Face ID / fingerprint prompt appears → turn on
+- [ ] Force-quit and reopen → "EatOS is locked" → unlock with Face ID / fingerprint
+- [ ] Cancel Face ID → passcode fallback works
+- [ ] Switch to another app for < 5 min → no lock; > 5 min → lock
+
+## 7. Edge cases
 - [ ] Airplane mode → app works normally (it needs no internet)
 - [ ] Rotate phone → app stays portrait
 - [ ] Preferences → **Share my usage summary** → share sheet opens; message has no allergy/diet info

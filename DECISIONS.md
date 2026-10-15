@@ -46,3 +46,12 @@ Risk: someone with a severe allergy may still choose a cross-contact meal. Every
 
 **D14 — NEPQ replaced by motivational interviewing.** NEPQ has no peer-reviewed evidence; MI does (g = 0.28). Questions stay short, open, and autonomy-respecting. 2026-10-15.
 
+**D15 — Redesign follows the mockup, with four deliberate deviations (NEEDS FOUNDER SIGN-OFF).** 2026-10-15.
+- No calorie numbers or "Great for Fat Loss": we have no verified nutrition data; tags are derived from facts we hold (High Protein, High Fiber, Quick, Budget-friendly, Vegetarian/Vegan, Comfort).
+- No named nearby restaurants (Chipotle, Panera…), distances, or "Best: …" items: no licensed menu/location data. Search shows dish patterns most places offer, filtered for the user's safety, with an honest note.
+- "Active days" instead of "Day streak": no streak pressure.
+- EatOS+ is a waitlist: price shown as "planned", no payment possible (`DRAFT_PRICING` in `premium.tsx`).
+- Also: food photos are illustrated tiles until licensed photography exists; onboarding keeps the "what gets in the way" and "anything else" (medical / no-diet-talk) questions → 6 steps.
+
+**D16 — Optional App Lock (Face ID / fingerprint / passcode).** Off by default; must authenticate to enable; cold start locked; relocks after 5 min away; uses the OS check only (no biometric data reaches EatOS). Not available on web. 2026-10-15.
+

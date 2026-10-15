@@ -76,7 +76,7 @@ export default function Onboarding() {
   // ---------- 1. Splash ----------
   if (step === 'welcome') {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.hero }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.hero, overflow: 'hidden' }}>
         <Leaves />
         <View style={styles.splash}>
           <View style={{ gap: space.xl }}>

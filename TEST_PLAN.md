@@ -2,7 +2,7 @@
 
 Run: `cd mobile && npm test && npm run typecheck && npm run lint`
 
-## Automated (154 tests; see stability note below)
+## Automated (171 tests in the regular suite, plus the deep suite below)
 | Area | File | What's covered |
 |---|---|---|
 | Allergy filtering | `src/engine/__tests__/recommend.test.ts` | Each of 9 allergens × every setting/meal time/time/budget combination never yields a `contains` match; outside home never yields `mayContain`; at-home label caution; staff-confirm caution; multi-allergy; swaps never add allergens |
@@ -25,6 +25,19 @@ Run: `cd mobile && npm test && npm run typecheck && npm run lint`
 | **Sentry** | `src/analytics/__tests__/sentry.test.ts` | off without DSN; privacy-safe options; off switch; scrubs user/request/extras/breadcrumbs/device name |
 | **Crash capture** | `src/analytics/__tests__/crash.test.ts` | records, caps, truncates; survives corrupt log; global handler chains |
 | **Adversarial (UI)** | `src/__tests__/flow.test.tsx` | deep links to /decide & /settings with no profile; /onboarding can't overwrite profile; double-tap records one decision and doesn't dismiss confirmation; storage read failure never overwrites data; garbage storage backed up and app still opens; crash screen; restore hidden meals |
+
+## Deep suite (`DEEP=1 npx jest src/__tests__/deep`, ~1 min + journeys)
+- **Exhaustive safety:** all 512 allergen combinations × 6 diet settings × 5 places × 4 meal times × 3 time buckets × 4 budgets = **737,280 recommendations**: none unsafe, none diet-breaking, all explained, ≤2 alternatives.
+- **safetyCheck** cross-checked for every meal × allergen combination × setting.
+- **100,000 random hostile deep links**: every one resolves to a known screen.
+- **10,000 corrupted saved-data blobs**: no crash; surviving allergy lists contain only real allergens.
+- **1,000 random user journeys** through the real screens (30 random taps each), checking after every tap for crash screens and that any meal on a recommendation screen is safe for the user's current allergies/diet.
+
+## Browser accessibility audit (Playwright + axe-core)
+All 19 screens × 3 widths (320, 390, 768) × light/dark = 114 audits: WCAG 2.1 AA, horizontal overflow, touch targets ≥ 44px, page/console errors. Result: 0 findings (after fixing toggle/radio semantics, tab-label contrast, splash overflow).
+
+## Browser monkey
+30 sessions × 300 random taps (incl. hostile search text, random back/tab jumps) on the built web app, checking for crashes, blank screens, overflow, errors.
 
 ## Browser sweep (automated, Playwright + axe-core, run 3× consecutively)
 4 sizes (320, 390, 430, 768 px) × light/dark. Each run: full onboarding with allergies + diet + gentle mode, all 5 locations, "Something else" until exhausted, save, double-tap accept, reload persistence, Preferences, keyboard-only navigation. Checks: page errors, console errors, horizontal overflow, WCAG 2.1 AA (axe), touch targets ≥ 44px, empty results, weight language in gentle mode. Also covers: Plan-my-next-meal screens. Result: 0 findings (final run on the finished build).
