@@ -9,6 +9,7 @@ import type {
   Recommendation,
   RecommendationResult,
   ScoredReason,
+  Setting,
 } from './types';
 
 const HOUR = 60 * 60 * 1000;
@@ -26,7 +27,7 @@ export const ALLERGEN_LABEL: Record<Allergen, string> = {
   sesame: 'sesame',
 };
 
-const OUTSIDE_HOME = new Set(['takeout', 'restaurant', 'on_the_go']);
+const OUTSIDE_HOME = new Set<Setting>(['takeout', 'restaurant', 'on_the_go']);
 const HUNGER_RANK = { light: 0, normal: 1, very: 2 } as const;
 
 export function mealTimeFor(date: Date): MealTime {
@@ -95,28 +96,35 @@ interface Eligibility {
   cautions: string[];
 }
 
+/**
+ * Allergy + diet check for one meal in one setting. Every path that shows a meal
+ * to the user (recommendations, "Have again") must go through this.
+ */
+export function safetyCheck(meal: MealIdea, profile: Profile, setting: Setting): Eligibility {
+  if (violatesDiet(meal, profile)) return { ok: false, cautions: [] };
+  // A known allergen in the standard version always excludes.
+  if (meal.contains.some((a) => profile.allergens.includes(a))) return { ok: false, cautions: [] };
+  const uncertain = meal.mayContain.filter((a) => profile.allergens.includes(a));
+  if (uncertain.length === 0) return { ok: true, cautions: [] };
+  // Outside the home the user can't read labels or control prep: exclude.
+  if (OUTSIDE_HOME.has(setting)) return { ok: false, cautions: [] };
+  return {
+    ok: true,
+    cautions: [`Check labels: some versions contain ${list(uncertain.map((a) => ALLERGEN_LABEL[a]))}.`],
+  };
+}
+
 function checkHardConstraints(
   meal: MealIdea,
   profile: Profile,
   ctx: Context,
   dislikedIds: Set<string>,
 ): Eligibility {
-  const cautions: string[] = [];
-  if (dislikedIds.has(meal.id)) return { ok: false, cautions };
-  if (!meal.settings.includes(ctx.setting)) return { ok: false, cautions };
-  if (violatesDiet(meal, profile)) return { ok: false, cautions };
-
-  // Allergies: a known allergen in the standard version always excludes.
-  if (meal.contains.some((a) => profile.allergens.includes(a))) return { ok: false, cautions };
-
-  const uncertain = meal.mayContain.filter((a) => profile.allergens.includes(a));
-  if (uncertain.length > 0) {
-    // Outside the home the user can't read labels or control prep: exclude.
-    if (OUTSIDE_HOME.has(ctx.setting)) return { ok: false, cautions };
-    cautions.push(
-      `Check labels: some versions contain ${list(uncertain.map((a) => ALLERGEN_LABEL[a]))}.`,
-    );
-  }
+  if (dislikedIds.has(meal.id)) return { ok: false, cautions: [] };
+  if (!meal.settings.includes(ctx.setting)) return { ok: false, cautions: [] };
+  const safety = safetyCheck(meal, profile, ctx.setting);
+  if (!safety.ok) return safety;
+  const cautions = [...safety.cautions];
 
   // Time: home/work meals must fit the time available.
   const needsPrep = ctx.setting === 'home' || ctx.setting === 'work';

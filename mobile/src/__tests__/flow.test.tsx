@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { Alert } from 'react-native';
 
-import RootLayout from '../app/_layout';
+import RootLayout, { ErrorBoundary } from '../app/_layout';
 import Decide from '../app/decide';
 import Home from '../app/index';
 import Onboarding from '../app/onboarding';
@@ -10,8 +11,10 @@ import { CATALOG } from '../engine';
 
 const routes = { _layout: RootLayout, index: Home, onboarding: Onboarding, decide: Decide, settings: Settings };
 
+let app: ReturnType<typeof renderRouter>;
+
 async function onboard(opts: { allergy?: string } = {}) {
-  renderRouter(routes, { initialUrl: '/' });
+  app = renderRouter(routes, { initialUrl: '/' });
   await screen.findByText('What do you want eating to do for you?');
   fireEvent.press(screen.getByLabelText('Build muscle'));
   fireEvent.press(screen.getByLabelText('Continue'));
@@ -37,11 +40,11 @@ beforeEach(async () => {
 describe('core daily flow', () => {
   it('new user: onboarding → decide → accept in a handful of taps', async () => {
     await onboard();
-    expect(screen).toHavePathname('/');
+    expect(app.getPathname()).toBe('/');
 
     fireEvent.press(screen.getByLabelText('Help me decide'));
     await screen.findByText('Your best option right now');
-    expect(screen).toHavePathname('/decide');
+    expect(app.getPathname()).toBe('/decide');
     expect(screen.getByText('Why this fits')).toBeTruthy();
 
     fireEvent.press(screen.getByLabelText('I’ll have this'));
@@ -90,8 +93,11 @@ describe('core daily flow', () => {
     fireEvent.press(screen.getByLabelText('Help me decide'));
     await screen.findByText('Your best option right now');
     fireEvent.press(screen.getByLabelText('I’ll have this'));
-    fireEvent.press(await screen.findByLabelText('Done'));
+    const done = await screen.findByLabelText('Done');
+    jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000); // a deliberate tap, not a double tap
+    fireEvent.press(done);
     await screen.findByText('Have again');
+    jest.restoreAllMocks();
   });
 
   it('delete all data returns to onboarding', async () => {
@@ -99,7 +105,6 @@ describe('core daily flow', () => {
     const g = globalThis as unknown as { confirm?: (m: string) => boolean };
     const original = g.confirm;
     g.confirm = () => true;
-    const { Alert } = require('react-native');
     const spy = jest.spyOn(Alert, 'alert').mockImplementation((...args: unknown[]) => {
       const buttons = args[2] as { text: string; onPress?: () => void }[];
       buttons.find((b) => b.text === 'Delete')?.onPress?.();
@@ -110,5 +115,91 @@ describe('core daily flow', () => {
     expect(await AsyncStorage.getItem('eatos.state.v1')).not.toContain('build_muscle');
     spy.mockRestore();
     g.confirm = original;
+  });
+});
+
+describe('ATTACK: UI-level abuse', () => {
+  const KEY = 'eatos.state.v1';
+  const stored = async () => JSON.parse((await AsyncStorage.getItem(KEY))!);
+
+  it.each(['/decide', '/settings'])('deep link to %s with no profile lands on onboarding, not a blank screen', async (url) => {
+    renderRouter(routes, { initialUrl: url });
+    await screen.findByText('What do you want eating to do for you?');
+  });
+
+  it('deep link to /onboarding cannot overwrite an existing profile', async () => {
+    await onboard({ allergy: 'Peanuts' });
+    screen.unmount();
+    renderRouter(routes, { initialUrl: '/onboarding' });
+    await screen.findByText('What should I eat?');
+    expect((await stored()).profile.allergens).toEqual(['peanut']);
+  });
+
+  it('double-tapping "I’ll have this" records one decision', async () => {
+    await onboard();
+    fireEvent.press(screen.getByLabelText('Help me decide'));
+    await screen.findByText('Your best option right now');
+    const btn = screen.getByLabelText('I’ll have this');
+    fireEvent.press(btn);
+    fireEvent.press(btn);
+    await screen.findByText(/^Enjoy your/);
+    await waitFor(async () => {
+      expect((await stored()).history.filter((e: { kind: string }) => e.kind === 'accepted')).toHaveLength(1);
+    });
+  });
+
+  it('a storage read failure never overwrites the saved profile', async () => {
+    await onboard({ allergy: 'Peanuts' });
+    screen.unmount();
+    const before = await AsyncStorage.getItem(KEY);
+    (AsyncStorage.getItem as jest.Mock).mockRejectedValueOnce(new Error('disk busy'));
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('What do you want eating to do for you?'); // runs without data this session
+    fireEvent.press(screen.getByLabelText('Lose weight'));
+    expect(await AsyncStorage.getItem(KEY)).toBe(before);
+  });
+
+  it('garbage in storage still opens the app and backs the garbage up', async () => {
+    await AsyncStorage.setItem(KEY, '{"version":1,"profile":"💥"');
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('What do you want eating to do for you?');
+    expect(await AsyncStorage.getItem('eatos.state.unreadable-backup')).toBe('{"version":1,"profile":"💥"');
+  });
+
+  it('"Have again" hides a saved meal that became unsafe after adding an allergy', async () => {
+    await AsyncStorage.setItem(
+      KEY,
+      JSON.stringify({
+        version: 1,
+        profile: { goal: 'eat_better', struggles: [], cuisines: [], allergens: ['dairy'], diets: [], budget: 2, considerations: [], createdAt: '' },
+        history: [{ mealId: 'greek-yogurt-bowl', kind: 'saved', at: new Date().toISOString() }],
+        lastContext: { setting: 'home', hunger: 'normal', time: 15, budget: 2, feeling: 'fine' },
+        analytics: [],
+      }),
+    );
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('What should I eat?');
+    expect(screen.queryByText('Greek yogurt bowl')).toBeNull();
+  });
+
+  it('a render crash shows a recovery screen instead of a white screen', async () => {
+    const retry = jest.fn(async () => {});
+    renderRouter({ index: () => <ErrorBoundary error={new Error('boom')} retry={retry} /> }, { initialUrl: '/' });
+    await screen.findByText('Something went wrong');
+    fireEvent.press(screen.getByLabelText('Try again'));
+    expect(retry).toHaveBeenCalled();
+  });
+
+  it('hidden ("Not for me") meals can be restored from Preferences', async () => {
+    await onboard();
+    fireEvent.press(screen.getByLabelText('Help me decide'));
+    await screen.findByText('Your best option right now');
+    fireEvent.press(screen.getByLabelText(/^Not for me/));
+    fireEvent.press(screen.getByLabelText('Back'));
+    fireEvent.press(await screen.findByLabelText('Preferences'));
+    fireEvent.press(await screen.findByLabelText('Show hidden meals again'));
+    await waitFor(async () => {
+      expect((await stored()).history.some((e: { kind: string }) => e.kind === 'disliked')).toBe(false);
+    });
   });
 });

@@ -1,9 +1,40 @@
-import { Stack } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppProvider } from '../store/AppProvider';
+import { Body, Button, Screen, Title } from '../ui/components';
 import { useColors } from '../ui/theme';
+
+/** Shown instead of a blank/white screen if anything crashes while rendering. */
+export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
+  const startFresh = async () => {
+    try {
+      // Keep a copy so nothing is lost for good, then clear the data that may be causing the crash.
+      const raw = await AsyncStorage.getItem('eatos.state.v1');
+      if (raw) await AsyncStorage.setItem('eatos.state.unreadable-backup', raw);
+      await AsyncStorage.removeItem('eatos.state.v1');
+    } finally {
+      retry();
+    }
+  };
+  return (
+    <SafeAreaProvider>
+      <Screen
+        footer={
+          <>
+            <Button label="Try again" onPress={retry} />
+            <Button label="Start fresh (keeps a backup)" variant="secondary" onPress={startFresh} />
+          </>
+        }
+      >
+        <Title>Something went wrong</Title>
+        <Body muted>EatOS hit an unexpected problem. Your saved preferences are still on this device.</Body>
+      </Screen>
+    </SafeAreaProvider>
+  );
+}
 
 function RootStack() {
   const c = useColors();

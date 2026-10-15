@@ -1,0 +1,7 @@
+{
+  "name": "decode-uri-component",
+  "version": "0.2.2-eatos.1",
+  "description": "Linear-time drop-in replacement for decode-uri-component@0.2.x (GHSA-vcc3-ghjq-m6fr). Used via npm overrides because the patched upstream release is ESM-only and breaks query-string@7.",
+  "main": "index.js",
+  "license": "MIT"
+}

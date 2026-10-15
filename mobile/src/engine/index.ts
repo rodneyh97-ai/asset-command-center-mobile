@@ -8,5 +8,6 @@ export {
   swapsFor,
   violatesDiet,
   standingCautions,
+  safetyCheck,
   ALLERGEN_LABEL,
 } from './recommend';

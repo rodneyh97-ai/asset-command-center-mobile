@@ -53,7 +53,7 @@ describe('parseStored', () => {
   );
 
   it('drops malformed history entries', () => {
-    const raw = JSON.stringify({ ...initialState, history: [{ mealId: 'a', kind: 'saved', at: 'x' }, { nope: 1 }] });
+    const raw = JSON.stringify({ ...initialState, history: [{ mealId: 'a', kind: 'saved', at: NOW.toISOString() }, { mealId: 'b', kind: 'saved', at: 'not-a-date' }, { nope: 1 }] });
     expect(parseStored(raw).history).toHaveLength(1);
   });
 });

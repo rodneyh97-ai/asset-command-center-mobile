@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
@@ -16,6 +16,7 @@ export default function Decide() {
   const [exclude, setExclude] = useState<string[]>([]);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [chosen, setChosen] = useState<Recommendation | null>(null);
+  const [chosenAt, setChosenAt] = useState(0);
   const profile = state.profile;
 
   // History is read once per screen visit so tapping Save doesn't reshuffle the cards under the user's finger.
@@ -36,12 +37,15 @@ export default function Decide() {
     else if (result) track('recommendation_empty');
   }, [primaryId, result, track]);
 
-  if (!profile || !result) return null;
+  if (!profile || !result) return <Redirect href="/onboarding" />;
 
   const accept = (r: Recommendation) => {
+    if (chosen) return; // ignore double taps
     feedback(r.meal.id, 'accepted');
-    track('recommendation_accepted', { msSinceStart: now() - startedAt, rank: shown.indexOf(r) });
+    const t = now();
+    track('recommendation_accepted', { msSinceStart: t - startedAt, rank: shown.indexOf(r) });
     setChosen(r);
+    setChosenAt(t);
   };
 
   const swap = () => {
@@ -60,7 +64,17 @@ export default function Decide() {
 
   if (chosen) {
     return (
-      <Screen footer={<Button label="Done" onPress={() => router.back()} />}>
+      <Screen
+        footer={
+          <Button
+            label="Done"
+            // The Done button appears where "I'll have this" was; ignore the second half of a double tap.
+            onPress={() => {
+              if (now() - chosenAt > DOUBLE_TAP_MS) router.back();
+            }}
+          />
+        }
+      >
         <Title>Enjoy your {chosen.meal.name.toLowerCase()}.</Title>
         <Body muted>Next time you open EatOS, it’ll ask how it was and use your answer to improve suggestions.</Body>
         <Card>
@@ -191,6 +205,8 @@ export default function Decide() {
     </Screen>
   );
 }
+
+const DOUBLE_TAP_MS = 700;
 
 function now() {
   return Date.now();

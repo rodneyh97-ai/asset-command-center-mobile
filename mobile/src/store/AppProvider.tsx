@@ -6,6 +6,7 @@ import type { FeedbackKind } from '../engine';
 import { initialState, parseStored, reducer, type Action, type AppState } from './state';
 
 const STORAGE_KEY = 'eatos.state.v1';
+const BACKUP_KEY = 'eatos.state.unreadable-backup';
 
 interface Store {
   state: AppState;
@@ -21,21 +22,41 @@ const StoreContext = createContext<Store | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [ready, setReady] = useState(false);
-  const hydrated = useRef(false);
+  // Only write after a successful read; otherwise a transient read error would
+  // overwrite the user's real data with an empty profile.
+  const canPersist = useRef(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => dispatch({ type: 'hydrate', state: parseStored(raw) }))
-      .catch(() => dispatch({ type: 'hydrate', state: initialState }))
-      .finally(() => {
-        hydrated.current = true;
-        setReady(true);
-        dispatch({ type: 'track', event: { name: 'app_open', at: new Date().toISOString() } });
-      });
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        const parsed = parseStored(raw);
+        if (parsed.unreadable) {
+          // Keep a copy of anything we couldn't read (e.g. from a newer app version) before replacing it.
+          await AsyncStorage.setItem(BACKUP_KEY, parsed.unreadable);
+        }
+        if (cancelled) return;
+        const { unreadable: _drop, ...clean } = parsed;
+        dispatch({ type: 'hydrate', state: clean });
+        canPersist.current = true;
+      } catch {
+        // Read failed: run this session in memory only and leave stored data untouched.
+        if (!cancelled) dispatch({ type: 'hydrate', state: initialState });
+      } finally {
+        if (!cancelled) {
+          setReady(true);
+          dispatch({ type: 'track', event: { name: 'app_open', at: new Date().toISOString() } });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (!hydrated.current) return;
+    if (!canPersist.current) return;
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => {
       // Storage full or unavailable: the app keeps working for this session.
     });
@@ -50,7 +71,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteAllData = useCallback(async () => {
-    await AsyncStorage.removeItem(STORAGE_KEY);
+    await AsyncStorage.multiRemove([STORAGE_KEY, BACKUP_KEY]);
+    canPersist.current = true;
     dispatch({ type: 'deleteAll' });
   }, []);
 

@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
@@ -11,7 +11,7 @@ import { space } from '../ui/theme';
 const STEPS = 6;
 
 export default function Onboarding() {
-  const { dispatch, track } = useStore();
+  const { state, ready, dispatch, track } = useStore();
   const [step, setStep] = useState(0);
   const [goal, setGoal] = useState<Goal | null>(null);
   const [struggles, setStruggles] = useState<Struggle[]>([]);
@@ -21,7 +21,10 @@ export default function Onboarding() {
   const [budget, setBudget] = useState<BudgetTier | null>(null);
   const [considerations, setConsiderations] = useState<Consideration[]>([]);
 
-  useEffect(() => track('onboarding_started'), [track]);
+  const alreadyOnboarded = ready && !!state.profile;
+  useEffect(() => {
+    if (ready && !state.profile) track('onboarding_started');
+  }, [ready, state.profile, track]);
 
   const finish = () => {
     dispatch({
@@ -53,6 +56,10 @@ export default function Onboarding() {
           : step === STEPS - 1
             ? 'Show me what to eat'
             : 'Continue';
+
+  if (!ready) return null;
+  // A link to /onboarding must not let anyone overwrite an existing profile (and its allergies).
+  if (alreadyOnboarded && step === 0) return <Redirect href="/" />;
 
   return (
     <Screen

@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, Share } from 'react-native';
 
@@ -23,7 +23,8 @@ export default function Settings() {
   const { state, dispatch, track, deleteAllData } = useStore();
   const [changingGoal, setChangingGoal] = useState(false);
   const p = state.profile;
-  if (!p) return null;
+  if (!p) return <Redirect href="/onboarding" />;
+  const hiddenCount = new Set(state.history.filter((e) => e.kind === 'disliked').map((e) => e.mealId)).size;
 
   const update = (patch: Partial<Omit<Profile, 'createdAt'>>) => dispatch({ type: 'updateProfile', patch });
 
@@ -69,6 +70,14 @@ export default function Settings() {
         value={p.considerations}
         onChange={(considerations) => update({ considerations })}
       />
+
+      {hiddenCount > 0 ? (
+        <>
+          <Heading>Hidden meals</Heading>
+          <Small>You marked {hiddenCount} {hiddenCount === 1 ? 'meal' : 'meals'} “Not for me”.</Small>
+          <Button label="Show hidden meals again" variant="secondary" onPress={() => dispatch({ type: 'clearHidden' })} />
+        </>
+      ) : null}
 
       <Heading>About EatOS</Heading>
       <Caution>

@@ -1,5 +1,7 @@
 // Pure app-state logic (no React, no storage) so it can be unit-tested.
-import type { Context, FeedbackEvent, FeedbackKind, Profile } from '../engine';
+import { CATALOG, safetyCheck, type Context, type FeedbackEvent, type FeedbackKind, type MealIdea, type Profile, type Setting } from '../engine';
+import { isSaved } from '../engine/recommend';
+import { sanitizeContext, sanitizeFeedback, sanitizeProfile } from '../engine/validate';
 import type { AnalyticsEvent } from '../analytics/events';
 
 export const SCHEMA_VERSION = 1;
@@ -15,6 +17,11 @@ export interface AppState {
   /** Last context the user picked; used as the default next time so they don't re-answer. */
   lastContext: SavedContext | null;
   analytics: AnalyticsEvent[];
+  /**
+   * Raw stored data we couldn't read (newer app version, corruption). Never persisted
+   * as state; the provider copies it to a backup key before anything overwrites it.
+   */
+  unreadable?: string;
 }
 
 export const initialState: AppState = {
@@ -32,7 +39,8 @@ export type Action =
   | { type: 'setLastContext'; context: SavedContext }
   | { type: 'feedback'; mealId: string; kind: FeedbackKind; at: string }
   | { type: 'track'; event: AnalyticsEvent }
-  | { type: 'deleteAll' };
+  | { type: 'deleteAll' }
+  | { type: 'clearHidden' };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -54,6 +62,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, analytics: [...state.analytics, action.event].slice(-MAX_ANALYTICS) };
     case 'deleteAll':
       return initialState;
+    case 'clearHidden':
+      return { ...state, history: state.history.filter((e) => e.kind !== 'disliked') };
   }
 }
 
@@ -61,34 +71,58 @@ export function defaultContext(profile: Profile): SavedContext {
   return { setting: 'home', hunger: 'normal', time: 15, budget: profile.budget, feeling: 'fine' };
 }
 
-/** Validate + migrate whatever was in storage. Anything unrecognised resets safely. */
+/** Validate + migrate whatever was in storage. Unreadable data is kept aside, never dropped silently. */
 export function parseStored(raw: string | null): AppState {
   if (!raw) return initialState;
+  let data: unknown;
   try {
-    const data = JSON.parse(raw) as Partial<AppState>;
-    if (typeof data !== 'object' || data === null || data.version !== SCHEMA_VERSION) return initialState;
-    return {
-      version: SCHEMA_VERSION,
-      profile: isProfile(data.profile) ? data.profile : null,
-      history: Array.isArray(data.history) ? data.history.filter(isFeedback) : [],
-      lastContext: data.lastContext ?? null,
-      analytics: Array.isArray(data.analytics) ? data.analytics : [],
-    };
+    data = JSON.parse(raw);
   } catch {
-    return initialState;
+    return { ...initialState, unreadable: raw };
   }
+  if (!data || typeof data !== 'object' || (data as { version?: unknown }).version !== SCHEMA_VERSION) {
+    return { ...initialState, unreadable: raw };
+  }
+  const d = data as Record<string, unknown>;
+  const profile = d.profile == null ? null : sanitizeProfile(d.profile);
+  if (d.profile != null && !profile) return { ...initialState, unreadable: raw };
+  return {
+    version: SCHEMA_VERSION,
+    profile,
+    history: Array.isArray(d.history)
+      ? d.history.map(sanitizeFeedback).filter((e): e is FeedbackEvent => !!e).slice(-MAX_HISTORY)
+      : [],
+    lastContext: sanitizeContext(d.lastContext),
+    analytics: Array.isArray(d.analytics)
+      ? d.analytics
+          .filter(
+            (e): e is AnalyticsEvent =>
+              !!e && typeof e === 'object' && typeof (e as AnalyticsEvent).name === 'string' && typeof (e as AnalyticsEvent).at === 'string',
+          )
+          .slice(-MAX_ANALYTICS)
+      : [],
+  };
 }
 
-function isProfile(p: unknown): p is Profile {
-  if (!p || typeof p !== 'object') return false;
-  const o = p as Record<string, unknown>;
-  return typeof o.goal === 'string' && Array.isArray(o.allergens) && Array.isArray(o.diets);
+export interface QuickPick {
+  meal: MealIdea;
+  saved: boolean;
+  cautions: string[];
 }
 
-function isFeedback(e: unknown): e is FeedbackEvent {
-  if (!e || typeof e !== 'object') return false;
-  const o = e as Record<string, unknown>;
-  return typeof o.mealId === 'string' && typeof o.kind === 'string' && typeof o.at === 'string';
+/** Saved + recent meals for one-tap repeat, re-checked against today's allergies, diet, and setting. */
+export function quickPicksFor(profile: Profile, history: FeedbackEvent[], setting: Setting, limit = 4): QuickPick[] {
+  const ids = [...CATALOG.filter((m) => isSaved(m.id, history)).map((m) => m.id), ...recentMealIds(history)];
+  const out: QuickPick[] = [];
+  for (const id of new Set(ids)) {
+    const meal = CATALOG.find((m) => m.id === id);
+    if (!meal) continue;
+    const safety = safetyCheck(meal, profile, setting);
+    if (!safety.ok) continue;
+    out.push({ meal, saved: isSaved(id, history), cautions: safety.cautions });
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 /** Most recent accepted meal ids, newest first, de-duplicated. */

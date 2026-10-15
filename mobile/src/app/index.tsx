@@ -2,10 +2,10 @@ import { Redirect, router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { CATALOG, isSaved, mealTimeFor, violatesDiet, type MealIdea } from '../engine';
+import { CATALOG, mealTimeFor, type MealIdea } from '../engine';
 import { useStore } from '../store/AppProvider';
-import { defaultContext, pendingRating, recentMealIds, weeklyReflection, type SavedContext } from '../store/state';
-import { Body, Button, Card, ChipGroup, Heading, Screen, Small, Title } from '../ui/components';
+import { defaultContext, pendingRating, quickPicksFor, weeklyReflection, type SavedContext } from '../store/state';
+import { Body, Button, Card, Caution, ChipGroup, Heading, Screen, Small, Title } from '../ui/components';
 import { BUDGETS, BUDGET_SHORT, FEELINGS, HUNGER, SETTINGS, TIMES } from '../ui/labels';
 import { space, useColors } from '../ui/theme';
 
@@ -19,21 +19,12 @@ export default function Home() {
   const now = new Date();
 
   const profile = state.profile;
-
-  // Saved + recent meals, re-checked against current allergies/diet (they may have changed since).
-  const quickPicks = useMemo(() => {
-    if (!profile) return [];
-    const ids = [
-      ...CATALOG.filter((m) => isSaved(m.id, state.history)).map((m) => m.id),
-      ...recentMealIds(state.history),
-    ];
-    const unique = [...new Set(ids)];
-    return unique
-      .map((id) => CATALOG.find((m) => m.id === id))
-      .filter((m): m is MealIdea => !!m)
-      .filter((m) => !m.contains.some((a) => profile.allergens.includes(a)) && !violatesDiet(m, profile))
-      .slice(0, 4);
-  }, [profile, state.history]);
+  const setting = state.lastContext?.setting ?? 'home';
+  // Re-checked against today's allergies, diet, and where the user is eating.
+  const quickPicks = useMemo(
+    () => (profile ? quickPicksFor(profile, state.history, setting) : []),
+    [profile, state.history, setting],
+  );
 
   if (!ready) return null;
   if (!profile) return <Redirect href="/onboarding" />;
@@ -54,6 +45,7 @@ export default function Home() {
   };
 
   const repeat = (m: MealIdea) => {
+    if (confirmation) return; // one repeat per visit; prevents double-tap duplicates
     feedback(m.id, 'accepted');
     track('repeat_meal');
     setConfirmation(`${m.name} it is. Enjoy.`);
@@ -130,26 +122,32 @@ export default function Home() {
       {quickPicks.length > 0 ? (
         <View style={{ gap: space.sm }}>
           <Heading>Have again</Heading>
-          {quickPicks.map((m) => (
-            <Pressable
-              key={m.id}
-              accessibilityRole="button"
-              accessibilityLabel={`Have ${m.name} again`}
-              onPress={() => repeat(m)}
-              style={({ pressed }) => ({
-                minHeight: 56,
-                padding: space.md,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: c.border,
-                backgroundColor: c.surface,
-                opacity: pressed ? 0.7 : 1,
-                justifyContent: 'center',
-              })}
-            >
-              <Body>{m.name}</Body>
-              <Small>{isSaved(m.id, state.history) ? 'Saved' : 'Recent'} · tap to have it again</Small>
-            </Pressable>
+          {quickPicks.map(({ meal: m, saved, cautions }) => (
+            <View key={m.id} style={{ gap: space.xs }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Have ${m.name} again`}
+                accessibilityState={{ disabled: !!confirmation }}
+                disabled={!!confirmation}
+                onPress={() => repeat(m)}
+                style={({ pressed }) => ({
+                  minHeight: 56,
+                  padding: space.md,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  backgroundColor: c.surface,
+                  opacity: pressed || confirmation ? 0.6 : 1,
+                  justifyContent: 'center',
+                })}
+              >
+                <Body>{m.name}</Body>
+                <Small>{saved ? 'Saved' : 'Recent'} · tap to have it again</Small>
+              </Pressable>
+              {cautions.map((t) => (
+                <Caution key={t}>{t}</Caution>
+              ))}
+            </View>
           ))}
         </View>
       ) : null}

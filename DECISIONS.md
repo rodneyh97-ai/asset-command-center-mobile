@@ -19,3 +19,12 @@
 **D6 — Code lives in `mobile/` of this repo on branch `claude/eatos-mvp`.** The only repo available was `asset-command-center-mobile` (empty, **public**). **Open question for founder:** rename this repo to `eatos` (and make it private?) or create a new one. 2026-10-15.
 
 **D7 — Sensitive-experience safeguards.** "No weight or diet talk" mode rewrites goal reasons; "medical condition" adds a not-medical-advice note to every pick. EatOS is not presented as treatment. 2026-10-15.
+
+**D8 — Security hardening after adversarial review.** 2026-10-15.
+- Vulnerable link decoder (`decode-uri-component`, GHSA-vcc3-ghjq-m6fr) ships in the app via Expo Router. A 2.4 KB malicious link froze the app for ~16 s. The upstream fix is ESM-only and breaks Expo Router, so `mobile/vendor/decode-uri-component` is a linear-time drop-in, forced via npm `overrides`. **Remove it once Expo Router upgrades query-string.**
+- Incoming links are allowlisted to 4 screens (`src/security/links.ts`); all parameters are dropped.
+- All stored data is validated field-by-field (`src/engine/validate.ts`). Unknown allergens/diets are dropped; unreadable data is backed up, never silently erased; a read failure never triggers a write.
+- One shared `safetyCheck` gates every path that shows a meal (recommendations and "Have again").
+- Crash screen with "Try again" / "Start fresh (keeps a backup)".
+- Remaining `npm audit` findings (braces, node-forge, sprintf-js, uuid) are in build tooling only and are not in the shipped app bundle (verified by inspecting the bundle).
+
