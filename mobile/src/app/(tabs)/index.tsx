@@ -69,6 +69,12 @@ export default function Home() {
     [profile, state.history, setting, state.memories, state.eatingWith],
   );
 
+  const learned = useMemo(
+    () => learnedCount(state, clock.now()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only these parts of state feed the count
+    [state.history, state.memories, state.personalization],
+  );
+
   // Plans whose moment has passed are dropped quietly — no guilt.
   const planExpired = !!state.plan && planStatus(state.plan, now) === 'expired';
   useEffect(() => {
@@ -108,7 +114,6 @@ export default function Home() {
           ? 'goal'
           : null;
   const question = free && !ask ? nextQuestion(state.questions, state.profile!.createdAt, now) : null;
-  const learned = learnedCount(state, now);
   const preferredName = valuesOf(state.memories.filter((m) => m.subject === 'me'), 'preferred_name')[0];
 
   const decide = () => {

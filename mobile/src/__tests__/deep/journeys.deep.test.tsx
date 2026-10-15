@@ -96,6 +96,9 @@ run('1,000 random user journeys through the real app', () => {
         }
       }
       screen.unmount();
+      // Mocks (e.g. AppState.addEventListener) record their arguments; without this, every
+      // journey's whole app stays reachable through those records and memory runs out.
+      jest.clearAllMocks();
       if (findings.length > 20) break;
     }
     console.log(`journeys: ${JOURNEYS}, taps: ${taps}, findings: ${findings.length}\n${findings.slice(0, 20).join('\n')}`);
