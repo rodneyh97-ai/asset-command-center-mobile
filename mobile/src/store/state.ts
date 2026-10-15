@@ -21,6 +21,8 @@ export interface AppState {
   plan: MealPlan | null;
   /** Meals the user asked to be reminded about. Empty = reminders off (the default). */
   reminders: ('breakfast' | 'lunch' | 'dinner')[];
+  /** User consent for sending anonymous crash reports (only matters when a crash server is configured). */
+  crashReports: boolean;
   /** Weekly reflection: when it last happened / was snoozed until. */
   checkin: { lastAt: string | null; snoozeUntil: string | null };
   /**
@@ -46,6 +48,7 @@ export const initialState: AppState = {
   analytics: [],
   plan: null,
   reminders: [],
+  crashReports: true,
   checkin: { lastAt: null, snoozeUntil: null },
 };
 
@@ -62,6 +65,7 @@ export type Action =
   | { type: 'setPlan'; plan: MealPlan }
   | { type: 'clearPlan' }
   | { type: 'setReminders'; meals: AppState['reminders'] }
+  | { type: 'setCrashReports'; on: boolean }
   | { type: 'checkinDone'; at: string }
   | { type: 'checkinSnooze'; until: string };
 
@@ -105,6 +109,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, plan: null };
     case 'setReminders':
       return { ...state, reminders: action.meals };
+    case 'setCrashReports':
+      return { ...state, crashReports: action.on };
     case 'checkinDone':
       return { ...state, checkin: { lastAt: action.at, snoozeUntil: null } };
     case 'checkinSnooze':
@@ -152,6 +158,7 @@ export function parseStored(raw: string | null): AppState {
     reminders: Array.isArray(d.reminders)
       ? [...new Set(d.reminders.filter((m): m is AppState['reminders'][number] => ['breakfast', 'lunch', 'dinner'].includes(m as string)))]
       : [],
+    crashReports: d.crashReports !== false,
     checkin: sanitizeCheckin(d.checkin),
   };
 }

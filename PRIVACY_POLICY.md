@@ -14,7 +14,12 @@ EatOS keeps your information **on your device**. We don't have servers that rece
 - Basic usage counts (for example, how many suggestions you accepted) and error reports if the app crashes.
 
 ## What leaves your device
-Nothing, automatically. If you tap **Share my usage summary**, your phone's share sheet opens with a text summary of counts and recent error messages. It contains **no allergies, diets, goals, or meal choices**. You choose whether and with whom to share it.
+- **Crash reports (if enabled by us and not switched off by you).** If EatOS crashes, an anonymous error report may be sent to our crash-reporting server: the error message, app version, and phone model/OS version. It never includes your name, email, allergies, diet, goals, meal choices, or a record of what you tapped. You can turn this off in Preferences → Your data.
+- **Usage summary, only if you share it.** If you tap **Share my usage summary**, your phone's share sheet opens with a text summary of counts and recent error messages. It contains **no allergies, diets, goals, or meal choices**. You choose whether and with whom to share it.
+- Nothing else. Your preferences, history, plans, and check-in answers stay on your device.
+
+## Reminders
+Meal reminders are off unless you turn them on. They are scheduled on your phone; no server is involved.
 
 ## Health-related information
 Allergies, diets, and "medical condition" flags can be sensitive. They stay on your device and are never used for advertising or shared with third parties.

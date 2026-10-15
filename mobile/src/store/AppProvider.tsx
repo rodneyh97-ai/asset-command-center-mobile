@@ -5,6 +5,7 @@ import { clock } from '../clock';
 import { CRASH_KEY } from '../analytics/crash';
 import type { AnalyticsEvent, AnalyticsName } from '../analytics/events';
 import type { FeedbackKind, MealTime, Setting } from '../engine';
+import { startCrashReporting } from '../analytics/sentry';
 import { syncReminders } from '../notifications/reminders';
 import { initialState, parseStored, reducer, type Action, type AppState } from './state';
 
@@ -45,6 +46,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         canPersist.current = true;
         // Re-apply reminder choices (e.g. after an OS update cleared scheduled notifications).
         void syncReminders(clean.reminders).catch(() => {});
+        startCrashReporting(clean.crashReports);
       } catch {
         // Read failed: run this session in memory only and leave stored data untouched.
         if (!cancelled) dispatch({ type: 'hydrate', state: initialState });
@@ -59,6 +61,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (ready) startCrashReporting(state.crashReports);
+  }, [ready, state.crashReports]);
 
   useEffect(() => {
     if (!canPersist.current) return;

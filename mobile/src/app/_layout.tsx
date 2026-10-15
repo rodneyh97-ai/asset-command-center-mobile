@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { installCrashHandlers, recordCrash } from '../analytics/crash';
+import { reportError } from '../analytics/sentry';
 import { AppProvider } from '../store/AppProvider';
 import { Body, Button, Screen, Title } from '../ui/components';
 import { useColors } from '../ui/theme';
@@ -15,6 +16,7 @@ installCrashHandlers();
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   useEffect(() => {
     void recordCrash(error, true);
+    reportError(error);
   }, [error]);
   const startFresh = async () => {
     try {

@@ -4,6 +4,7 @@ import { Alert, Platform, Share } from 'react-native';
 
 import { clock } from '../clock';
 import { crashSummaryLines, readCrashes } from '../analytics/crash';
+import { sentryConfigured } from '../analytics/sentry';
 import { summaryText } from '../analytics/events';
 import type { Goal, Profile } from '../engine';
 import { ensurePermission, REMINDER_TIMES, remindersSupported, syncReminders, type ReminderMeal } from '../notifications/reminders';
@@ -116,7 +117,21 @@ export default function Settings() {
       </Caution>
 
       <Heading>Your data</Heading>
-      <Small>Everything is stored only on this device. Nothing is sent anywhere unless you share it.</Small>
+      <Small>
+        Your preferences and history are stored only on this device.
+        {sentryConfigured ? ' If EatOS crashes, an anonymous error report can be sent so we can fix it.' : ''}
+      </Small>
+      {sentryConfigured ? (
+        <ChipGroup
+          label="Anonymous crash reports"
+          options={[
+            { value: 'on', label: 'Send' },
+            { value: 'off', label: 'Don’t send' },
+          ]}
+          value={state.crashReports ? 'on' : 'off'}
+          onChange={(v) => dispatch({ type: 'setCrashReports', on: v === 'on' })}
+        />
+      ) : null}
       <Button
         label="Share my usage summary"
         variant="secondary"
