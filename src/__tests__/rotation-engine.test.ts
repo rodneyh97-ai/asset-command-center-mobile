@@ -40,6 +40,7 @@ function makeSetState(overrides: Partial<SetState> = {}): SetState {
     liberoIds: [],
     liberoTargetPlayerIds: [],
     liberoAutoSwapEnabled: false,
+    playerStats: {},
     ...overrides,
   };
 }

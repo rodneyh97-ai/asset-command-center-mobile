@@ -11,6 +11,8 @@ import PlayerStatusPanel from './PlayerStatusPanel';
 import RotationPreview from './RotationPreview';
 import CorrectMatchState from './CorrectMatchState';
 import MatchHistory from './MatchHistory';
+import StatRecorder from './StatRecorder';
+import StatsExportPanel from './StatsExportPanel';
 
 interface LiveMatchDashboardProps {
   players: Player[];
@@ -19,7 +21,7 @@ interface LiveMatchDashboardProps {
   liberoIds?: string[];
 }
 
-type ActivePanel = null | 'substitute' | 'libero' | 'playerStatus' | 'rotationPreview' | 'correct' | 'history';
+type ActivePanel = null | 'substitute' | 'libero' | 'playerStatus' | 'rotationPreview' | 'correct' | 'history' | 'stats';
 
 function isMatchPoint(ourScore: number, opponentScore: number, targetScore: number): 'us' | 'opponent' | null {
   if (ourScore >= targetScore - 1 && ourScore > opponentScore) return 'us';
@@ -49,6 +51,7 @@ export default function LiveMatchDashboard({
     getCurrentSet,
     endSet,
     endMatch,
+    recordStat,
   } = useMatchStore();
 
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
@@ -223,6 +226,13 @@ export default function LiveMatchDashboard({
             </button>
           </div>
 
+          {/* Quick Stat Recording */}
+          <StatRecorder
+            courtPlayers={currentSet.courtPlayers}
+            players={players}
+            onRecordStat={recordStat}
+          />
+
           {/* Secondary Actions */}
           <div className="grid grid-cols-3 gap-2">
             <button
@@ -246,12 +256,18 @@ export default function LiveMatchDashboard({
           </div>
 
           {/* Tertiary Actions */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              onClick={() => setActivePanel('stats')}
+              className="bg-indigo-700 hover:bg-indigo-600 text-white py-2 rounded-lg text-xs font-medium touch-manipulation"
+            >
+              Stats
+            </button>
             <button
               onClick={() => setActivePanel('playerStatus')}
               className="bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg text-xs font-medium touch-manipulation"
             >
-              Player Status
+              Status
             </button>
             <button
               onClick={() => setActivePanel('rotationPreview')}
@@ -382,6 +398,7 @@ export default function LiveMatchDashboard({
           })}
           players={players}
           substitutionCount={currentSet.substitutionCount}
+          playerStats={currentSet.playerStats}
           onConfirm={(outId, inId) => {
             confirmSubstitution(outId, inId);
             setActivePanel(null);
@@ -449,6 +466,16 @@ export default function LiveMatchDashboard({
         <MatchHistory
           events={state.eventLog}
           players={players}
+          onClose={() => setActivePanel(null)}
+        />
+      )}
+
+      {activePanel === 'stats' && (
+        <StatsExportPanel
+          players={players}
+          sets={state.sets}
+          currentSetIndex={state.currentSetIndex}
+          opponentName={opponentName}
           onClose={() => setActivePanel(null)}
         />
       )}

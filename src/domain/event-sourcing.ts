@@ -4,9 +4,11 @@ import {
   MatchEventType,
   MatchState,
   MatchStatus,
+  PlayerMatchStats,
   RotationPosition,
   ServingTeam,
   SetState,
+  StatCategory,
 } from './types';
 import { processOurPoint, processOpponentPoint, getAutoLiberoSwap } from './rotation-engine';
 
@@ -54,6 +56,7 @@ function createInitialSetState(
     liberoIds,
     liberoTargetPlayerIds,
     liberoAutoSwapEnabled: liberoTargetPlayerIds.length > 0,
+    playerStats: {},
   };
 }
 
@@ -129,6 +132,30 @@ export function rebuildState(events: MatchEvent[]): MatchState | null {
   return state;
 }
 
+function createEmptyStats(playerId: string): PlayerMatchStats {
+  return {
+    playerId,
+    kills: 0, attackErrors: 0, aces: 0, serviceErrors: 0,
+    digs: 0, blocks: 0, assists: 0, receptionErrors: 0, ballHandlingErrors: 0,
+    pointsOnCourt: 0, pointsAgainstOnCourt: 0,
+  };
+}
+
+function updatePlusMinus(
+  setState: SetState,
+  field: 'pointsOnCourt' | 'pointsAgainstOnCourt'
+): SetState {
+  const updatedStats = { ...setState.playerStats };
+  for (const cp of setState.courtPlayers) {
+    const existing = updatedStats[cp.playerId] || createEmptyStats(cp.playerId);
+    updatedStats[cp.playerId] = {
+      ...existing,
+      [field]: existing[field] + 1,
+    };
+  }
+  return { ...setState, playerStats: updatedStats };
+}
+
 function applyEvent(state: MatchState, event: MatchEvent): MatchState {
   switch (event.eventType) {
     case 'MatchCreated':
@@ -168,7 +195,8 @@ function applyEvent(state: MatchState, event: MatchEvent): MatchState {
       const currentSet = state.sets[state.currentSetIndex];
       if (!currentSet) return state;
       const result = processOurPoint(currentSet);
-      const afterLibero = applyAutoLiberoSwaps(result.setState, event.timestamp);
+      const withPlusMinus = updatePlusMinus(result.setState, 'pointsOnCourt');
+      const afterLibero = applyAutoLiberoSwaps(withPlusMinus, event.timestamp);
       const updatedSets = [...state.sets];
       updatedSets[state.currentSetIndex] = afterLibero;
       return { ...state, sets: updatedSets };
@@ -178,7 +206,8 @@ function applyEvent(state: MatchState, event: MatchEvent): MatchState {
       const currentSet = state.sets[state.currentSetIndex];
       if (!currentSet) return state;
       const result = processOpponentPoint(currentSet);
-      const afterLibero = applyAutoLiberoSwaps(result.setState, event.timestamp);
+      const withPlusMinus = updatePlusMinus(result.setState, 'pointsAgainstOnCourt');
+      const afterLibero = applyAutoLiberoSwaps(withPlusMinus, event.timestamp);
       const updatedSets = [...state.sets];
       updatedSets[state.currentSetIndex] = afterLibero;
       return { ...state, sets: updatedSets };
@@ -310,6 +339,31 @@ function applyEvent(state: MatchState, event: MatchEvent): MatchState {
       return { ...state, sets: updatedSets };
     }
 
+    case 'StatRecorded': {
+      const currentSet = state.sets[state.currentSetIndex];
+      if (!currentSet) return state;
+      const { playerId, category } = event.payload as { playerId: string; category: StatCategory };
+      const existing = currentSet.playerStats[playerId] || createEmptyStats(playerId);
+      const updated = { ...existing };
+      switch (category) {
+        case 'kill': updated.kills++; break;
+        case 'attackError': updated.attackErrors++; break;
+        case 'ace': updated.aces++; break;
+        case 'serviceError': updated.serviceErrors++; break;
+        case 'dig': updated.digs++; break;
+        case 'block': updated.blocks++; break;
+        case 'assist': updated.assists++; break;
+        case 'receptionError': updated.receptionErrors++; break;
+        case 'ballHandlingError': updated.ballHandlingErrors++; break;
+      }
+      const updatedSets = [...state.sets];
+      updatedSets[state.currentSetIndex] = {
+        ...currentSet,
+        playerStats: { ...currentSet.playerStats, [playerId]: updated },
+      };
+      return { ...state, sets: updatedSets };
+    }
+
     case 'SetEnded': {
       return state;
     }
@@ -353,4 +407,14 @@ export function canUndo(state: MatchState): boolean {
 
 export function canRedo(state: MatchState): boolean {
   return state.eventLog.some((e) => e.undone);
+}
+
+export function getPlayerPlusMinus(stats: PlayerMatchStats): number {
+  return stats.pointsOnCourt - stats.pointsAgainstOnCourt;
+}
+
+export function getHittingPercentage(stats: PlayerMatchStats): number | null {
+  const attempts = stats.kills + stats.attackErrors;
+  if (attempts === 0) return null;
+  return (stats.kills - stats.attackErrors) / attempts;
 }

@@ -1,14 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Player, RotationPosition } from '@/domain/types';
+import { Player, RotationPosition, PlayerMatchStats } from '@/domain/types';
 import { getFrontRow, getBackRow, getNextRotations } from '@/domain/rotation-engine';
+import { getPlayerPlusMinus, getHittingPercentage } from '@/domain/event-sourcing';
 
 interface SubstitutionPanelProps {
   courtPlayers: RotationPosition[];
   benchPlayerIds: string[];
   players: Player[];
   substitutionCount: number;
+  playerStats?: Record<string, PlayerMatchStats>;
   onConfirm: (playerOutId: string, playerInId: string) => void;
   onClose: () => void;
 }
@@ -18,6 +20,7 @@ export default function SubstitutionPanel({
   benchPlayerIds,
   players,
   substitutionCount,
+  playerStats,
   onConfirm,
   onClose,
 }: SubstitutionPanelProps) {
@@ -79,6 +82,23 @@ export default function SubstitutionPanel({
                   <div className="font-bold">#{player.jerseyNumber}</div>
                   <div className="text-sm">{player.displayName}</div>
                   <div className="text-xs text-slate-400">P{rp.position}</div>
+                  {playerStats?.[rp.playerId] && (() => {
+                    const s = playerStats[rp.playerId];
+                    const pm = getPlayerPlusMinus(s);
+                    const hitPct = getHittingPercentage(s);
+                    return (
+                      <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+                        <span className={pm >= 0 ? 'text-green-400' : 'text-red-400'}>
+                          {pm >= 0 ? '+' : ''}{pm}
+                        </span>
+                        <span className="text-slate-400">{s.kills}K</span>
+                        <span className="text-slate-400">{s.digs}D</span>
+                        {hitPct !== null && (
+                          <span className="text-slate-400">{hitPct.toFixed(3)}</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </button>
               );
             })}

@@ -137,6 +137,23 @@ export interface Match {
   updatedAt: string;
 }
 
+export type StatCategory = 'kill' | 'attackError' | 'ace' | 'serviceError' | 'dig' | 'block' | 'assist' | 'receptionError' | 'ballHandlingError';
+
+export interface PlayerMatchStats {
+  playerId: string;
+  kills: number;
+  attackErrors: number;
+  aces: number;
+  serviceErrors: number;
+  digs: number;
+  blocks: number;
+  assists: number;
+  receptionErrors: number;
+  ballHandlingErrors: number;
+  pointsOnCourt: number;   // points scored by team while this player was on court
+  pointsAgainstOnCourt: number; // points scored by opponent while on court
+}
+
 export type MatchEventType =
   | 'MatchCreated'
   | 'SetStarted'
@@ -149,7 +166,8 @@ export type MatchEventType =
   | 'CorrectionApplied'
   | 'NoteAdded'
   | 'SetEnded'
-  | 'MatchEnded';
+  | 'MatchEnded'
+  | 'StatRecorded';
 
 export interface MatchEvent {
   id: string;
@@ -193,6 +211,7 @@ export interface SetState {
   liberoIds: string[];
   liberoTargetPlayerIds: string[];
   liberoAutoSwapEnabled: boolean;
+  playerStats: Record<string, PlayerMatchStats>;
 }
 
 export interface MatchState {

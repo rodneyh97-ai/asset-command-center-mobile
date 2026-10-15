@@ -6,6 +6,7 @@ import {
   RotationPosition,
   ServingTeam,
   SetState,
+  StatCategory,
 } from '@/domain/types';
 import {
   createEvent,
@@ -37,6 +38,7 @@ interface MatchStore {
   liberoReplacement(liberoId: string, replacedPlayerId: string, isEntering: boolean): void;
   applyCorrection(corrections: Record<string, unknown>, auditNote: string): void;
   changePlayerAvailability(playerId: string, status: string, reason?: string): void;
+  recordStat(playerId: string, category: StatCategory): void;
   addNote(note: string): void;
   endSet(): void;
   endMatch(): void;
@@ -201,6 +203,18 @@ export const useMatchStore = create<MatchStore>((set, get) => ({
       status,
       reason,
     });
+    const updatedLog = [...state.eventLog, event];
+    const newState = rebuildState(updatedLog);
+    if (newState) {
+      set({ state: { ...newState, eventLog: updatedLog } });
+      persistEvent(event);
+    }
+  },
+
+  recordStat(playerId, category) {
+    const { state } = get();
+    if (!state) return;
+    const event = createEvent(state.matchId, 'StatRecorded', { playerId, category });
     const updatedLog = [...state.eventLog, event];
     const newState = rebuildState(updatedLog);
     if (newState) {
