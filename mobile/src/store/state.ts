@@ -21,6 +21,12 @@ export interface AppState {
   plan: MealPlan | null;
   /** Meals the user asked to be reminded about. Empty = reminders off (the default). */
   reminders: ('breakfast' | 'lunch' | 'dinner')[];
+  /** Optional Face ID / fingerprint lock. Off by default. */
+  appLock: boolean;
+  /** When the owner last unlocked in this session. Never restored from storage, so cold starts are locked. */
+  sessionUnlockedAt: number | null;
+  /** Joined the EatOS+ waitlist (no payment is ever taken here). */
+  premiumInterest: boolean;
   /** User consent for sending anonymous crash reports (only matters when a crash server is configured). */
   crashReports: boolean;
   /** Weekly reflection: when it last happened / was snoozed until. */
@@ -49,6 +55,9 @@ export const initialState: AppState = {
   plan: null,
   reminders: [],
   crashReports: true,
+  appLock: false,
+  sessionUnlockedAt: null,
+  premiumInterest: false,
   checkin: { lastAt: null, snoozeUntil: null },
 };
 
@@ -66,6 +75,9 @@ export type Action =
   | { type: 'clearPlan' }
   | { type: 'setReminders'; meals: AppState['reminders'] }
   | { type: 'setCrashReports'; on: boolean }
+  | { type: 'setAppLock'; on: boolean; at: number }
+  | { type: 'unlocked'; at: number }
+  | { type: 'setPremiumInterest'; on: boolean }
   | { type: 'checkinDone'; at: string }
   | { type: 'checkinSnooze'; until: string };
 
@@ -110,6 +122,13 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, plan: null };
     case 'setReminders':
       return { ...state, reminders: action.meals };
+    case 'setAppLock':
+      // Turning it on requires a successful check first, so this session counts as unlocked.
+      return { ...state, appLock: action.on, sessionUnlockedAt: action.on ? action.at : null };
+    case 'unlocked':
+      return { ...state, sessionUnlockedAt: action.at };
+    case 'setPremiumInterest':
+      return { ...state, premiumInterest: action.on };
     case 'setCrashReports':
       return { ...state, crashReports: action.on };
     case 'checkinDone':
@@ -160,6 +179,9 @@ export function parseStored(raw: string | null): AppState {
       ? [...new Set(d.reminders.filter((m): m is AppState['reminders'][number] => ['breakfast', 'lunch', 'dinner'].includes(m as string)))]
       : [],
     crashReports: d.crashReports !== false,
+    appLock: d.appLock === true,
+    sessionUnlockedAt: null,
+    premiumInterest: d.premiumInterest === true,
     checkin: sanitizeCheckin(d.checkin),
   };
 }

@@ -1,16 +1,35 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Platform, Share } from 'react-native';
+import { Alert, Platform, Pressable, Share, Text, View } from 'react-native';
 
-import { clock } from '../clock';
-import { crashSummaryLines, readCrashes } from '../analytics/crash';
-import { sentryConfigured } from '../analytics/sentry';
-import { summaryText } from '../analytics/events';
-import type { Goal, Profile } from '../engine';
-import { ensurePermission, REMINDER_TIMES, remindersSupported, syncReminders, type ReminderMeal } from '../notifications/reminders';
-import { useStore } from '../store/AppProvider';
-import { Body, Button, Caution, ChipGroup, Heading, MultiChipGroup, Screen, Small } from '../ui/components';
-import { ALLERGENS, BUDGETS, CONSIDERATIONS, CUISINES, DIETS, GOALS, STRUGGLES } from '../ui/labels';
+import { crashSummaryLines, readCrashes } from '../../analytics/crash';
+import { summaryText } from '../../analytics/events';
+import { sentryConfigured } from '../../analytics/sentry';
+import { clock } from '../../clock';
+import type { Goal, Profile } from '../../engine';
+import { ensurePermission, REMINDER_TIMES, remindersSupported, syncReminders, type ReminderMeal } from '../../notifications/reminders';
+import { authenticate, canLock, lockSupported } from '../../security/appLock';
+import { useStore } from '../../store/AppProvider';
+import {
+  Body,
+  Button,
+  Card,
+  Caution,
+  Heading,
+  Icon,
+  MultiChipGroup,
+  OptionCard,
+  RadioRow,
+  Row,
+  Screen,
+  Small,
+  Title,
+  ToggleRow,
+  toggleIn,
+} from '../../ui/components';
+import { ALLERGENS, BUDGETS, CONSIDERATIONS, CUISINES, DIETS, GOAL_LABEL, GOALS, STRUGGLES } from '../../ui/labels';
+import { space, type, useColors } from '../../ui/theme';
 
 function confirm(title: string, message: string, ok: string, onOk: () => void) {
   if (Platform.OS === 'web') {
@@ -23,48 +42,109 @@ function confirm(title: string, message: string, ok: string, onOk: () => void) {
   ]);
 }
 
-export default function Settings() {
-  const { state, dispatch, track, deleteAllData } = useStore();
+export default function ProfileScreen() {
+  const { state, ready, dispatch, track, deleteAllData } = useStore();
+  const c = useColors();
   const [changingGoal, setChangingGoal] = useState(false);
-  const [reminderNote, setReminderNote] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const p = state.profile;
+  if (!ready) return null; // wait for saved data before deciding where to go
   if (!p) return <Redirect href="/onboarding" />;
   const hiddenCount = new Set(state.history.filter((e) => e.kind === 'disliked').map((e) => e.mealId)).size;
-
   const update = (patch: Partial<Omit<Profile, 'createdAt'>>) => dispatch({ type: 'updateProfile', patch });
 
   const changeGoal = (goal: Goal) => {
     if (goal === p.goal) return setChangingGoal(false);
-    const label = GOALS.find((g) => g.value === goal)?.label ?? goal;
-    confirm('Change your main goal?', `EatOS will start optimizing for “${label}”.`, 'Change goal', () => {
+    confirm('Change your main goal?', `EatOS will start optimizing for “${GOAL_LABEL[goal]}”.`, 'Change goal', () => {
       update({ goal });
       track('goal_changed');
       setChangingGoal(false);
     });
   };
 
+  const toggleLock = async (on: boolean) => {
+    setNote(null);
+    if (on) {
+      if (!(await canLock())) {
+        setNote('Set up Face ID, a fingerprint, or a passcode on your phone first.');
+        return;
+      }
+      // Prove the owner can unlock before turning it on, so nobody locks themselves out.
+      if (!(await authenticate('Turn on App Lock'))) return;
+    }
+    dispatch({ type: 'setAppLock', on, at: Date.now() });
+    track('app_lock_changed', { on });
+  };
+
   return (
-    <Screen>
+    <Screen edges={['top', 'left', 'right']}>
+      <Title>Profile</Title>
+
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+        <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: c.selected, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="person" size={26} color={c.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[type.label, { color: c.ink }]}>Goal: {GOAL_LABEL[p.goal]}</Text>
+          <Small>Your data stays on this phone</Small>
+        </View>
+      </Card>
+
+      <Pressable accessibilityRole="button" accessibilityLabel="EatOS+ — see what’s coming" onPress={() => router.push('/premium')}>
+        <LinearGradient colors={[c.hero, '#1F5A3E']} style={{ borderRadius: 18, padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+          <Text style={{ fontSize: 28 }} accessible={false}>
+            👑
+          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[type.heading, { color: c.heroText }]}>EatOS+</Text>
+            <Text style={[type.small, { color: c.heroMuted }]}>More personalized. More options.</Text>
+          </View>
+          <Icon name="chevron-forward" size={20} color={c.heroText} />
+        </LinearGradient>
+      </Pressable>
+
       <Heading>Main goal</Heading>
       {changingGoal ? (
-        <ChipGroup options={GOALS} value={p.goal} onChange={changeGoal} />
+        GOALS.map((g) => <OptionCard key={g.value} icon={g.icon} title={g.label} subtitle={g.subtitle} selected={p.goal === g.value} onPress={() => changeGoal(g.value)} />)
       ) : (
-        <>
-          <Body>{GOALS.find((g) => g.value === p.goal)?.label}</Body>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <Body>{GOAL_LABEL[p.goal]}</Body>
           <Button label="Change goal" variant="secondary" onPress={() => setChangingGoal(true)} />
-        </>
+        </Row>
       )}
 
-      <Heading>Allergies</Heading>
-      <MultiChipGroup options={ALLERGENS} value={p.allergens} onChange={(allergens) => update({ allergens })} />
-      <Heading>Diet</Heading>
-      <MultiChipGroup options={DIETS} value={p.diets} onChange={(diets) => update({ diets })} />
+      <Heading>Dietary restrictions</Heading>
+      <Small>Allergies are strict rules. EatOS never suggests a meal that normally contains them.</Small>
+      <View>
+        {DIETS.map((d) => (
+          <ToggleRow key={d.value} icon={d.icon} label={d.label} value={p.diets.includes(d.value)} onChange={() => update({ diets: toggleIn(p.diets, d.value) })} />
+        ))}
+        {ALLERGENS.map((a) => (
+          <ToggleRow
+            key={a.value}
+            icon={a.icon}
+            label={a.label}
+            value={p.allergens.includes(a.value)}
+            onChange={() => update({ allergens: toggleIn(p.allergens, a.value) })}
+          />
+        ))}
+      </View>
 
       <Heading>Foods you enjoy</Heading>
       <MultiChipGroup options={CUISINES} value={p.cuisines} onChange={(cuisines) => update({ cuisines })} />
 
       <Heading>What makes eating well hard</Heading>
       <MultiChipGroup options={STRUGGLES} value={p.struggles} onChange={(struggles) => update({ struggles })} />
+
+      <Heading>Typical budget per meal</Heading>
+      <View style={{ gap: space.sm }} accessibilityRole="radiogroup" accessibilityLabel="Typical budget per meal">
+        {BUDGETS.map((b) => (
+          <RadioRow key={b.value} label={b.label} selected={p.budget === b.value} onPress={() => update({ budget: b.value })} />
+        ))}
+      </View>
+
+      <Heading>Other considerations</Heading>
+      <MultiChipGroup options={CONSIDERATIONS.filter((x) => x.value !== 'none')} value={p.considerations} onChange={(considerations) => update({ considerations })} />
 
       {remindersSupported ? (
         <>
@@ -77,64 +157,58 @@ export default function Settings() {
             }))}
             value={state.reminders}
             onChange={async (meals) => {
-              setReminderNote(null);
+              setNote(null);
               if (meals.length > state.reminders.length && !(await ensurePermission())) {
-                setReminderNote('Notifications are turned off for EatOS in your phone’s settings.');
+                setNote('Notifications are turned off for EatOS in your phone’s settings.');
                 return;
               }
               dispatch({ type: 'setReminders', meals });
               track('reminders_changed', { count: meals.length });
-              await syncReminders(meals).catch(() => setReminderNote('Couldn’t update reminders. Try again.'));
+              await syncReminders(meals).catch(() => setNote('Couldn’t update reminders. Try again.'));
             }}
           />
-          {reminderNote ? <Caution>{reminderNote}</Caution> : null}
         </>
       ) : null}
 
-      <Heading>Usual budget</Heading>
-      <ChipGroup options={BUDGETS} value={p.budget} onChange={(budget) => update({ budget })} />
-
-      <Heading>Other considerations</Heading>
-      <MultiChipGroup
-        options={CONSIDERATIONS.filter((c) => c.value !== 'none')}
-        value={p.considerations}
-        onChange={(considerations) => update({ considerations })}
-      />
+      <Heading>Privacy & security</Heading>
+      <View>
+        {lockSupported ? <ToggleRow icon="lock-closed-outline" label="App Lock (Face ID / fingerprint)" value={state.appLock} onChange={toggleLock} /> : null}
+        {sentryConfigured ? (
+          <ToggleRow
+            icon="bug-outline"
+            label="Send anonymous crash reports"
+            value={state.crashReports}
+            onChange={(on) => dispatch({ type: 'setCrashReports', on })}
+          />
+        ) : null}
+      </View>
+      <Small>
+        Your preferences and history are stored only on this phone.
+        {state.appLock ? ' App Lock asks again after 5 minutes away.' : ''}
+      </Small>
+      {note ? <Caution>{note}</Caution> : null}
 
       {hiddenCount > 0 ? (
         <>
           <Heading>Hidden meals</Heading>
-          <Small>You marked {hiddenCount} {hiddenCount === 1 ? 'meal' : 'meals'} “Not for me”.</Small>
+          <Small>
+            You marked {hiddenCount} {hiddenCount === 1 ? 'meal' : 'meals'} “Not for me”.
+          </Small>
           <Button label="Show hidden meals again" variant="secondary" onPress={() => dispatch({ type: 'clearHidden' })} />
         </>
       ) : null}
 
       <Heading>About EatOS</Heading>
       <Caution>
-        EatOS suggests general meal ideas. It is not medical or nutrition advice, and it can’t verify restaurant
-        ingredients, prices, or kitchen practices. If you have a medical condition or an eating disorder, follow your
-        care team’s guidance.
+        EatOS suggests general meal ideas. It is not medical or nutrition advice, and it can’t verify restaurant ingredients, prices, or kitchen
+        practices. If you have a medical condition or an eating disorder, follow your care team’s guidance.
       </Caution>
 
       <Heading>Your data</Heading>
-      <Small>
-        Your preferences and history are stored only on this device.
-        {sentryConfigured ? ' If EatOS crashes, an anonymous error report can be sent so we can fix it.' : ''}
-      </Small>
-      {sentryConfigured ? (
-        <ChipGroup
-          label="Anonymous crash reports"
-          options={[
-            { value: 'on', label: 'Send' },
-            { value: 'off', label: 'Don’t send' },
-          ]}
-          value={state.crashReports ? 'on' : 'off'}
-          onChange={(v) => dispatch({ type: 'setCrashReports', on: v === 'on' })}
-        />
-      ) : null}
       <Button
         label="Share my usage summary"
         variant="secondary"
+        icon="share-outline"
         hint="Opens the share sheet with counts only — no allergies, diets, or meals"
         onPress={async () => {
           const crashes = await readCrashes();
@@ -145,6 +219,7 @@ export default function Settings() {
       <Button
         label="Delete all my data"
         variant="danger"
+        icon="trash-outline"
         onPress={() =>
           confirm('Delete everything?', 'Your preferences, history, and saved meals will be erased from this device.', 'Delete', async () => {
             await deleteAllData();

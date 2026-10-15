@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { installCrashHandlers, recordCrash } from '../analytics/crash';
 import { reportError } from '../analytics/sentry';
+import { AppLockGate } from '../security/AppLockGate';
 import { AppProvider } from '../store/AppProvider';
 import { Body, Button, Screen, Title } from '../ui/components';
 import { useColors } from '../ui/theme';
@@ -68,7 +69,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AppProvider>
         <StatusBar style="auto" />
-        <RootStack />
+        <AppLockGate>
+          <RootStack />
+        </AppLockGate>
       </AppProvider>
     </SafeAreaProvider>
   );

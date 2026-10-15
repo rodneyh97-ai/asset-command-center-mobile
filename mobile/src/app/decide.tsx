@@ -29,7 +29,7 @@ import { space, useColors } from '../ui/theme';
 type Nudge = { moreLike?: MealIdea['cuisine']; avoid?: MealIdea['cuisine'] };
 
 export default function Decide() {
-  const { state, dispatch, track, feedback } = useStore();
+  const { state, ready, dispatch, track, feedback } = useStore();
   const c = useColors();
   const planning = useLocalSearchParams<{ plan?: string }>().plan === '1';
   const [slot] = useState(() => nextMealSlot(clock.now()));
@@ -72,6 +72,7 @@ export default function Decide() {
     else if (result) track('recommendation_empty');
   }, [primaryId, result, track]);
 
+  if (!ready) return null; // wait for saved data before deciding where to go
   if (!profile || !result || !ctx) return <Redirect href="/onboarding" />;
 
   const accept = (r: Recommendation) => {

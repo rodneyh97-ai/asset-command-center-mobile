@@ -2,37 +2,39 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { Alert } from 'react-native';
 
-import RootLayout, { ErrorBoundary } from '../app/_layout';
-import Decide from '../app/decide';
-import Home from '../app/index';
-import Onboarding from '../app/onboarding';
-import Settings from '../app/settings';
+import { ErrorBoundary } from '../app/_layout';
 import { clock } from '../clock';
 import { CATALOG } from '../engine';
 
-const routes = { _layout: RootLayout, index: Home, onboarding: Onboarding, decide: Decide, settings: Settings };
+// Render the real app directory so tabs, stack screens and params all behave as in production.
+const routes = 'src/app';
 
 let app: ReturnType<typeof renderRouter>;
 
 async function onboard(opts: { allergy?: string } = {}) {
   app = renderRouter(routes, { initialUrl: '/' });
-  await screen.findByText('What do you want eating to do for you?');
+  fireEvent.press(await screen.findByLabelText('Get Started'));
+  await screen.findByText('What’s your main goal?');
   fireEvent.press(screen.getByLabelText('Build muscle'));
-  fireEvent.press(screen.getByLabelText('Continue'));
-  fireEvent.press(screen.getByLabelText('No time'));
-  fireEvent.press(screen.getByLabelText('Continue'));
-  fireEvent.press(screen.getByLabelText('Skip'));
+  fireEvent.press(screen.getByLabelText('Next'));
+  fireEvent.press(screen.getByLabelText('Skip')); // foods
   if (opts.allergy) {
     fireEvent.press(screen.getByLabelText(opts.allergy));
-    fireEvent.press(screen.getByLabelText('Continue'));
+    fireEvent.press(screen.getByLabelText('Next'));
   } else {
-    fireEvent.press(screen.getByLabelText('None — continue'));
+    fireEvent.press(screen.getByLabelText('None — Next'));
   }
-  fireEvent.press(screen.getByLabelText('$$ Moderate'));
-  fireEvent.press(screen.getByLabelText('Continue'));
-  fireEvent.press(screen.getByLabelText('Show me what to eat'));
+  fireEvent.press(screen.getByLabelText('$10 – $15'));
+  fireEvent.press(screen.getByLabelText('Next'));
+  fireEvent.press(screen.getByLabelText('No time'));
+  fireEvent.press(screen.getByLabelText('Next'));
+  fireEvent.press(screen.getByLabelText('Finish'));
+  fireEvent.press(await screen.findByLabelText('Go to Home'));
   await screen.findByText('What should I eat?');
 }
+
+/** Avatar button and the tab bar both say "Profile"; either goes to the same place. */
+const openProfile = () => fireEvent.press(screen.getAllByLabelText('Profile')[0]);
 
 beforeEach(async () => {
   await AsyncStorage.clear();
@@ -43,24 +45,24 @@ describe('core daily flow', () => {
     await onboard();
     expect(app.getPathname()).toBe('/');
 
-    fireEvent.press(screen.getByLabelText('Help me decide'));
-    await screen.findByText('Your best option right now');
+    fireEvent.press(screen.getByLabelText('Get my recommendation'));
+    await screen.findByText('Your Recommendation');
     expect(app.getPathname()).toBe('/decide');
-    expect(screen.getByText('Why this fits')).toBeTruthy();
+    expect(screen.getByText('Why this works for you')).toBeTruthy();
 
-    fireEvent.press(screen.getByLabelText('I’ll have this'));
+    fireEvent.press(screen.getByLabelText('Try this'));
     await screen.findByText(/^Enjoy your/);
   });
 
-  it('home returns to its compact form after deciding', async () => {
+  it('returning user: one tap from opening the app to a recommendation, well under 15 seconds', async () => {
     await onboard();
-    fireEvent.press(screen.getByLabelText(/^Current settings/));
-    expect(screen.getByText('How hungry?')).toBeTruthy();
-    fireEvent.press(screen.getByLabelText('Help me decide'));
-    await screen.findByText('Your best option right now');
-    fireEvent.press(screen.getByLabelText('Back'));
-    await screen.findByText('What should I eat?');
-    expect(screen.queryByText('How hungry?')).toBeNull();
+    screen.unmount();
+    const t0 = Date.now();
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByLabelText('Get my recommendation')); // the only tap needed
+    await screen.findByText('Your Recommendation');
+    expect(Date.now() - t0).toBeLessThan(15000);
+    expect(screen.getByText('Why this works for you')).toBeTruthy();
   });
 
   it('persists preferences: a returning user skips onboarding', async () => {
@@ -71,20 +73,20 @@ describe('core daily flow', () => {
     screen.unmount();
     renderRouter(routes, { initialUrl: '/' });
     await screen.findByText('What should I eat?');
-    expect(screen.queryByText('What do you want eating to do for you?')).toBeNull();
+    expect(screen.queryByLabelText('Get Started')).toBeNull();
   });
 
   it('onboarding cannot continue without a goal', async () => {
     renderRouter(routes, { initialUrl: '/' });
-    await screen.findByText('What do you want eating to do for you?');
-    expect(screen.getByLabelText('Continue')).toBeDisabled();
+    fireEvent.press(await screen.findByLabelText('Get Started'));
+    expect(screen.getByLabelText('Next')).toBeDisabled();
   });
 
   it('allergy chosen in onboarding is enforced on the recommendation screen', async () => {
-    await onboard({ allergy: 'Gluten / wheat' });
+    await onboard({ allergy: 'Gluten free' });
     fireEvent.press(screen.getByLabelText('Takeout'));
-    fireEvent.press(screen.getByLabelText('Help me decide'));
-    await screen.findByText('Your best option right now');
+    fireEvent.press(screen.getByLabelText('Get my recommendation'));
+    await screen.findByText('Your Recommendation');
     const glutenMeals = CATALOG.filter((m) => m.contains.includes('gluten') || m.mayContain.includes('gluten'));
     for (const m of glutenMeals) expect(screen.queryByText(m.name)).toBeNull();
     expect(screen.getAllByText(/gluten\/wheat allergy and confirm/).length).toBeGreaterThan(0);
@@ -92,8 +94,8 @@ describe('core daily flow', () => {
 
   it('"Something else" shows a different recommendation', async () => {
     await onboard();
-    fireEvent.press(screen.getByLabelText('Help me decide'));
-    await screen.findByText('Your best option right now');
+    fireEvent.press(screen.getByLabelText('Get my recommendation'));
+    await screen.findByText('Your Recommendation');
     const titles = () => CATALOG.map((m) => m.name).filter((n) => screen.queryByRole('header', { name: n }));
     const first = titles();
     fireEvent.press(screen.getByLabelText('Something else'));
@@ -104,9 +106,9 @@ describe('core daily flow', () => {
 
   it('accepted meal appears in "Have again" for one-tap repeat, with undo', async () => {
     await onboard();
-    fireEvent.press(screen.getByLabelText('Help me decide'));
-    await screen.findByText('Your best option right now');
-    fireEvent.press(screen.getByLabelText('I’ll have this'));
+    fireEvent.press(screen.getByLabelText('Get my recommendation'));
+    await screen.findByText('Your Recommendation');
+    fireEvent.press(screen.getByLabelText('Try this'));
     const done = await screen.findByLabelText('Done');
     jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000); // a deliberate tap, not a double tap
     fireEvent.press(done);
@@ -129,9 +131,9 @@ describe('core daily flow', () => {
       const buttons = args[2] as { text: string; onPress?: () => void }[];
       buttons.find((b) => b.text === 'Delete')?.onPress?.();
     });
-    fireEvent.press(screen.getByLabelText('Preferences'));
+    openProfile();
     fireEvent.press(await screen.findByLabelText('Delete all my data'));
-    await screen.findByText('What do you want eating to do for you?');
+    await screen.findByLabelText('Get Started');
     expect(await AsyncStorage.getItem('eatos.state.v1')).not.toContain('build_muscle');
     spy.mockRestore();
     g.confirm = original;
@@ -142,13 +144,13 @@ describe('ATTACK: UI-level abuse', () => {
   const KEY = 'eatos.state.v1';
   const stored = async () => JSON.parse((await AsyncStorage.getItem(KEY))!);
 
-  it.each(['/decide', '/settings'])('deep link to %s with no profile lands on onboarding, not a blank screen', async (url) => {
+  it.each(['/decide', '/profile'])('deep link to %s with no profile lands on onboarding, not a blank screen', async (url) => {
     renderRouter(routes, { initialUrl: url });
-    await screen.findByText('What do you want eating to do for you?');
+    await screen.findByLabelText('Get Started');
   });
 
   it('deep link to /onboarding cannot overwrite an existing profile', async () => {
-    await onboard({ allergy: 'Peanuts' });
+    await onboard({ allergy: 'Peanut allergy' });
     screen.unmount();
     renderRouter(routes, { initialUrl: '/onboarding' });
     await screen.findByText('What should I eat?');
@@ -157,9 +159,9 @@ describe('ATTACK: UI-level abuse', () => {
 
   it('double-tapping "I’ll have this" records one decision', async () => {
     await onboard();
-    fireEvent.press(screen.getByLabelText('Help me decide'));
-    await screen.findByText('Your best option right now');
-    const btn = screen.getByLabelText('I’ll have this');
+    fireEvent.press(screen.getByLabelText('Get my recommendation'));
+    await screen.findByText('Your Recommendation');
+    const btn = screen.getByLabelText('Try this');
     fireEvent.press(btn);
     fireEvent.press(btn);
     await screen.findByText(/^Enjoy your/);
@@ -169,12 +171,13 @@ describe('ATTACK: UI-level abuse', () => {
   });
 
   it('a storage read failure never overwrites the saved profile', async () => {
-    await onboard({ allergy: 'Peanuts' });
+    await onboard({ allergy: 'Peanut allergy' });
     screen.unmount();
     const before = await AsyncStorage.getItem(KEY);
     (AsyncStorage.getItem as jest.Mock).mockRejectedValueOnce(new Error('disk busy'));
     renderRouter(routes, { initialUrl: '/' });
-    await screen.findByText('What do you want eating to do for you?'); // runs without data this session
+    await screen.findByLabelText('Get Started'); // runs without data this session
+    fireEvent.press(screen.getByLabelText('Get Started'));
     fireEvent.press(screen.getByLabelText('Lose weight'));
     expect(await AsyncStorage.getItem(KEY)).toBe(before);
   });
@@ -182,7 +185,7 @@ describe('ATTACK: UI-level abuse', () => {
   it('garbage in storage still opens the app and backs the garbage up', async () => {
     await AsyncStorage.setItem(KEY, '{"version":1,"profile":"💥"');
     renderRouter(routes, { initialUrl: '/' });
-    await screen.findByText('What do you want eating to do for you?');
+    await screen.findByLabelText('Get Started');
     expect(await AsyncStorage.getItem('eatos.state.unreadable-backup')).toBe('{"version":1,"profile":"💥"');
   });
 
@@ -212,11 +215,12 @@ describe('ATTACK: UI-level abuse', () => {
 
   it('hidden ("Not for me") meals can be restored from Preferences', async () => {
     await onboard();
-    fireEvent.press(screen.getByLabelText('Help me decide'));
-    await screen.findByText('Your best option right now');
+    fireEvent.press(screen.getByLabelText('Get my recommendation'));
+    await screen.findByText('Your Recommendation');
     fireEvent.press(screen.getByLabelText(/^Not for me/));
     fireEvent.press(screen.getByLabelText('Back'));
-    fireEvent.press(await screen.findByLabelText('Preferences'));
+    await screen.findByText('What should I eat?');
+    openProfile();
     fireEvent.press(await screen.findByLabelText('Show hidden meals again'));
     await waitFor(async () => {
       expect((await stored()).history.some((e: { kind: string }) => e.kind === 'disliked')).toBe(false);
@@ -333,3 +337,109 @@ describe('weekly check-in (motivational-interviewing style)', () => {
   });
 });
 
+
+describe('new screens', () => {
+  const seed = async (over: object = {}) =>
+    AsyncStorage.setItem(
+      'eatos.state.v1',
+      JSON.stringify({
+        version: 1,
+        profile: { goal: 'eat_better', struggles: [], cuisines: [], allergens: ['peanut'], diets: ['vegetarian'], budget: 2, considerations: [], createdAt: new Date().toISOString() },
+        history: [],
+        lastContext: { setting: 'restaurant', hunger: 'normal', time: 20, budget: 2, feeling: 'fine' },
+        analytics: [],
+        ...over,
+      }),
+    );
+
+  it('Search lists only ideas that are safe for this user, and opens details', async () => {
+    await seed();
+    renderRouter(routes, { initialUrl: '/search' });
+    await screen.findByText('Explore ideas');
+    for (const m of CATALOG) {
+      const unsafe = m.contains.includes('peanut') || m.mayContain.includes('peanut') || m.diet.hasMeat || m.diet.hasFish;
+      if (unsafe) expect(screen.queryByLabelText(`${m.name}. Open details.`)).toBeNull();
+    }
+    fireEvent.changeText(screen.getByLabelText('Search meal ideas'), 'falafel');
+    fireEvent.press(await screen.findByLabelText('Falafel bowl. Open details.'));
+    await screen.findByText('How to get it');
+    expect(screen.getAllByText(/peanut allergy and confirm/).length).toBeGreaterThan(0);
+  });
+
+  it('meal links: hostile ids never reach the screen; unknown ids are handled', async () => {
+    await seed();
+    renderRouter(routes, { initialUrl: '/meal/%3Cscript%3E' });
+    await screen.findByText('What should I eat?'); // blocked by the link guard → Home
+    screen.unmount();
+    renderRouter(routes, { initialUrl: '/meal/not-a-real-meal' });
+    await screen.findByText('Meal not found');
+  });
+
+  it('meal detail refuses to offer an unsafe meal even if linked directly', async () => {
+    await seed();
+    renderRouter(routes, { initialUrl: '/meal/apple-peanut-butter' });
+    await screen.findByText(/doesn’t fit your allergies or diet/);
+    expect(screen.queryByLabelText('Try this')).toBeNull();
+  });
+
+  it('EatOS+ waitlist records interest and never charges', async () => {
+    await seed();
+    renderRouter(routes, { initialUrl: '/premium' });
+    fireEvent.press(await screen.findByLabelText('Join the EatOS+ waitlist'));
+    await screen.findByText(/No payment was taken/);
+    const s = JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!);
+    expect(s.premiumInterest).toBe(true);
+    expect(s.analytics.some((e: { name: string }) => e.name === 'premium_interest')).toBe(true);
+  });
+
+  it('Favorites shows saved meals and flags ones that no longer fit', async () => {
+    await seed({
+      history: [
+        { mealId: 'falafel-bowl', kind: 'saved', at: new Date().toISOString() },
+        { mealId: 'pb-banana-toast', kind: 'saved', at: new Date().toISOString() },
+      ],
+    });
+    renderRouter(routes, { initialUrl: '/favorites' });
+    await screen.findByText('Saved');
+    expect(screen.getByLabelText('Falafel bowl. Open details.')).toBeTruthy();
+    expect(screen.getByLabelText('Peanut butter banana toast, no longer fits your restrictions. Open details.')).toBeTruthy();
+  });
+
+  it('Progress shows decisions and mood without any streak', async () => {
+    const at = new Date().toISOString();
+    await seed({
+      history: [
+        { mealId: 'falafel-bowl', kind: 'accepted', at, feeling: 'tired' },
+        { mealId: 'falafel-bowl', kind: 'accepted', at, feeling: 'energized' },
+      ],
+    });
+    renderRouter(routes, { initialUrl: '/history' });
+    await screen.findByText('Your Progress');
+    expect(screen.getByLabelText('2 Good decisions')).toBeTruthy();
+    expect(screen.queryByText(/streak/i)).toBeNull();
+    expect(screen.getByText('2 times')).toBeTruthy();
+  });
+
+  it('App Lock: shows the lock screen on a cold start and unlocks with Face ID', async () => {
+    const LocalAuthentication = jest.requireMock('expo-local-authentication');
+    LocalAuthentication.authenticateAsync.mockResolvedValueOnce({ success: false });
+    await seed({ appLock: true });
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('EatOS is locked');
+    fireEvent.press(screen.getByLabelText('Unlock'));
+    await waitFor(() => expect(screen.queryByText('EatOS is locked')).toBeNull());
+  });
+
+  it('App Lock can only be turned on after proving you can unlock', async () => {
+    const LocalAuthentication = jest.requireMock('expo-local-authentication');
+    await seed();
+    renderRouter(routes, { initialUrl: '/profile' });
+    LocalAuthentication.authenticateAsync.mockResolvedValueOnce({ success: false });
+    fireEvent.press(await screen.findByLabelText('App Lock (Face ID / fingerprint)'));
+    await waitFor(() => expect(LocalAuthentication.authenticateAsync).toHaveBeenCalled());
+    expect(JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!).appLock).toBe(false);
+    fireEvent.press(screen.getByLabelText('App Lock (Face ID / fingerprint)'));
+    await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!).appLock).toBe(true));
+    expect(screen.queryByText('EatOS is locked')).toBeNull(); // turning it on doesn't lock you out mid-session
+  });
+});

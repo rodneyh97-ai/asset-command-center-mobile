@@ -200,14 +200,21 @@ describe('ATTACK: corrupt or hostile stored data', () => {
 describe('ATTACK: hostile deep links', () => {
   it.each([
     ['eatos://decide', '/decide'],
-    ['/settings', '/settings'],
-    ['eatos://settings?reset=1&allergens=', '/settings'],
+    ['/settings', '/profile'],
+    ['eatos://settings?reset=1&allergens=', '/profile'],
     ['eatos://../../etc/passwd', '/'],
     ['eatos://onboarding#x', '/onboarding'],
     ['https://evil.example/decide', '/decide'],
     ['javascript:alert(1)', '/'],
     ['eatos://' + '%C3'.repeat(5000), '/'],
     ['eatos://unknown', '/'],
+    ['eatos:///history', '/history'],
+    ['exp://127.0.0.1:8081/--/search', '/search'],
+    ['eatos://settings', '/profile'],
+    ['eatos://meal/burrito-bowl', '/meal/burrito-bowl'],
+    ['eatos://meal/<script>', '/'],
+    ['eatos://meal/../../profile', '/'],
+    ['data:text/html,hi', '/'],
     ['', '/'],
   ])('%s → %s', (input, expected) => {
     expect(sanitizeIncomingPath(input)).toBe(expected);

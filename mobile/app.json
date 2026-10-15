@@ -50,7 +50,15 @@
     "plugins": [
       "expo-router",
       "expo-notifications",
-      "@sentry/react-native"
+      "@sentry/react-native",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "EatOS uses Face ID only if you turn on App Lock, to keep your food preferences private."
+        }
+      ],
+      "expo-asset",
+      "expo-font"
     ],
     "scheme": "eatos"
   }
