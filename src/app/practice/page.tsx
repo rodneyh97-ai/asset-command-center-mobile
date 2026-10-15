@@ -42,16 +42,18 @@ const allSkillAreas: SkillArea[] = [
   'rotation',
 ];
 
-const statusBadge: Record<string, string> = {
-  draft: 'bg-slate-600 text-slate-300',
-  active: 'bg-blue-900/50 text-blue-400',
-  completed: 'bg-green-900/50 text-green-400',
+const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
+  draft: { bg: 'bg-slate-600/60', text: 'text-slate-300', label: 'Draft' },
+  active: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Progress' },
+  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Completed' },
 };
 
-/**
- * Compute a simple trend from a player's dev plan data.
- * If more weaknesses than strengths, declining. If equal, stable. Otherwise improving.
- */
+const tabConfig: Record<Tab, { icon: string; label: string }> = {
+  plans: { icon: '\u{1F4CB}', label: 'Plans' },
+  players: { icon: '\u{1F3D0}', label: 'Players' },
+  drills: { icon: '\u{1F3AF}', label: 'Drills' },
+};
+
 function computeTrend(
   devPlan: { strengths: unknown[]; weaknesses: unknown[] } | undefined,
 ): 'improving' | 'declining' | 'stable' {
@@ -90,7 +92,6 @@ function PracticeContent() {
   const [genDate, setGenDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Drill library state
   const [drillFilter, setDrillFilter] = useState<SkillArea | 'all'>('all');
   const [drillSearch, setDrillSearch] = useState('');
 
@@ -104,13 +105,11 @@ function PracticeContent() {
     }
   }, [teamId, setActiveTeam, loadPlayersForTeam, loadTeamData]);
 
-  // Sort plans by date descending
   const sortedPlans = useMemo(
     () => [...plans].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     [plans],
   );
 
-  // Filter drills
   const filteredDrills = useMemo(() => {
     let result: Drill[] = drillFilter === 'all' ? DRILL_LIBRARY : getDrillsBySkillArea(drillFilter);
     if (drillSearch.trim()) {
@@ -146,7 +145,6 @@ function PracticeContent() {
   const handleDrillFeedback = useCallback(
     (drillId: string, orderIndex: number, feedback: string) => {
       if (activePlanId) {
-        // Find drill's current status to preserve it while updating feedback
         const plan = plans.find((p) => p.id === activePlanId);
         if (!plan) return;
         const allDrills = [...plan.warmup, ...plan.mainBlock, ...plan.cooldown];
@@ -177,19 +175,20 @@ function PracticeContent() {
     [teamId, addObservation],
   );
 
-  // If no teamId
   if (!teamId) {
     return (
       <main className="p-6 max-w-4xl mx-auto">
-        <Link href="/" className="text-blue-400 hover:text-blue-300 mb-4 text-sm">
-          {'←'} Back
+        <Link href="/" className="text-blue-400 hover:text-blue-300 mb-4 text-sm flex items-center gap-1 min-h-[44px]">
+          <span className="text-lg">{'‹'}</span> Back to Dashboard
         </Link>
-        <p className="text-slate-400 mt-4">Select a team first from the dashboard.</p>
+        <div className="mt-12 text-center">
+          <div className="text-5xl mb-4 opacity-40">{'\u{1F3D0}'}</div>
+          <p className="text-slate-400 text-lg">Select a team from the dashboard to get started.</p>
+        </div>
       </main>
     );
   }
 
-  // If viewing a specific plan
   const activePlan = activePlanId ? plans.find((p) => p.id === activePlanId) : null;
   if (activePlan) {
     return (
@@ -213,6 +212,10 @@ function PracticeContent() {
     return Math.round((all.filter((d) => d.status === 'completed').length / all.length) * 100);
   };
 
+  const drillCountLabel = drillFilter === 'all'
+    ? `${filteredDrills.length} drills`
+    : `${filteredDrills.length} ${skillAreaLabels[drillFilter as SkillArea] || ''} drills`;
+
   return (
     <main className="flex flex-col p-4 md:p-6 max-w-4xl mx-auto w-full min-h-screen">
       {/* Header */}
@@ -220,12 +223,12 @@ function PracticeContent() {
         <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="text-blue-400 hover:text-blue-300 text-sm touch-manipulation min-h-[44px] flex items-center"
+            className="text-blue-400 hover:text-blue-300 text-sm touch-manipulation min-h-[44px] flex items-center gap-1"
           >
-            {'←'} Back
+            <span className="text-lg">{'‹'}</span> Back
           </Link>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white">Practice Planner</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-white">Practice</h1>
             {team && <p className="text-sm text-slate-400">{team.name}</p>}
           </div>
         </div>
@@ -237,13 +240,14 @@ function PracticeContent() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-3 rounded-lg text-sm font-medium transition-colors touch-manipulation min-h-[44px] ${
+            className={`flex-1 py-3 rounded-lg text-sm font-medium transition-all touch-manipulation min-h-[44px] flex items-center justify-center gap-2 ${
               activeTab === tab
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-400 hover:text-slate-300'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
             }`}
           >
-            {tab === 'plans' ? 'Plans' : tab === 'players' ? 'Players' : 'Drills'}
+            <span>{tabConfig[tab].icon}</span>
+            <span>{tabConfig[tab].label}</span>
           </button>
         ))}
       </div>
@@ -253,40 +257,58 @@ function PracticeContent() {
         <div>
           <button
             onClick={() => setShowGenerateModal(true)}
-            className="w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-xl text-lg font-bold text-white mb-4 touch-manipulation min-h-[56px]"
+            className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 rounded-xl text-lg font-bold text-white mb-5 touch-manipulation min-h-[56px] flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-[0.98] transition-transform"
           >
-            Generate Plan
+            <span className="text-xl">+</span>
+            <span>Generate Practice Plan</span>
           </button>
 
           {sortedPlans.length === 0 ? (
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 text-center">
-              <p className="text-slate-400">
-                No practice plans yet. Generate one to get started.
-              </p>
+            <div className="bg-slate-800/30 border border-dashed border-slate-700 rounded-xl p-10 text-center">
+              <div className="text-5xl mb-3 opacity-30">{'\u{1F4CB}'}</div>
+              <p className="text-slate-400 text-lg mb-1">No practice plans yet</p>
+              <p className="text-slate-500 text-sm">Generate your first plan to get data-driven practice sessions</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {sortedPlans.map((plan) => (
-                <button
-                  key={plan.id}
-                  onClick={() => setActivePlanId(plan.id)}
-                  className="w-full text-left bg-slate-800 hover:bg-slate-700 rounded-xl p-4 transition-colors touch-manipulation min-h-[56px]"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-white">{plan.name}</span>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${statusBadge[plan.status] || 'bg-slate-700 text-slate-300'}`}
-                    >
-                      {plan.status}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-slate-400">
-                    <span>{new Date(plan.date).toLocaleDateString()}</span>
-                    <span>{plan.durationMinutes} min</span>
-                    <span>{planCompletion(plan)}% complete</span>
-                  </div>
-                </button>
-              ))}
+              {sortedPlans.map((plan) => {
+                const completion = planCompletion(plan);
+                const cfg = statusConfig[plan.status] || statusConfig.draft;
+                const drillCount = plan.warmup.length + plan.mainBlock.length + plan.cooldown.length;
+                return (
+                  <button
+                    key={plan.id}
+                    onClick={() => setActivePlanId(plan.id)}
+                    className="w-full text-left bg-slate-800 hover:bg-slate-750 rounded-xl p-4 transition-all touch-manipulation min-h-[56px] border border-slate-700/50 hover:border-slate-600/50 active:scale-[0.99]"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-white">{plan.name}</span>
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${cfg.bg} ${cfg.text}`}>
+                        {cfg.label}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-slate-400 mb-3">
+                      <span>{new Date(plan.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                      <span className="text-slate-600">{'·'}</span>
+                      <span>{plan.durationMinutes} min</span>
+                      <span className="text-slate-600">{'·'}</span>
+                      <span>{drillCount} drills</span>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            completion === 100 ? 'bg-emerald-500' : 'bg-blue-500'
+                          }`}
+                          style={{ width: `${completion}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-slate-400 w-10 text-right font-medium">{completion}%</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -294,31 +316,37 @@ function PracticeContent() {
 
       {/* Tab: Players */}
       {activeTab === 'players' && (
-        <div className="space-y-3">
-          {players.length === 0 ? (
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 text-center">
-              <p className="text-slate-400">No players on this team yet.</p>
-            </div>
-          ) : (
-            players.map((player) => {
-              const devPlan = devPlans.find((d) => d.playerId === player.id);
-              const playerObs = observations.filter(
-                (o: CoachObservation) => o.playerId === player.id,
-              );
-              const trend = computeTrend(devPlan);
-
-              return (
-                <PlayerDevCard
-                  key={player.id}
-                  player={player}
-                  devPlan={devPlan}
-                  observations={playerObs}
-                  trend={trend}
-                  onAddObservation={handleAddObservation}
-                />
-              );
-            })
+        <div>
+          {players.length > 0 && (
+            <p className="text-sm text-slate-500 mb-3">{players.length} players on roster</p>
           )}
+          <div className="space-y-3">
+            {players.length === 0 ? (
+              <div className="bg-slate-800/30 border border-dashed border-slate-700 rounded-xl p-10 text-center">
+                <div className="text-5xl mb-3 opacity-30">{'\u{1F3D0}'}</div>
+                <p className="text-slate-400 text-lg mb-1">No players on this team</p>
+                <p className="text-slate-500 text-sm">Add players from the team roster to track development</p>
+              </div>
+            ) : (
+              players.map((player) => {
+                const devPlan = devPlans.find((d) => d.playerId === player.id);
+                const playerObs = observations.filter(
+                  (o: CoachObservation) => o.playerId === player.id,
+                );
+                const trend = computeTrend(devPlan);
+                return (
+                  <PlayerDevCard
+                    key={player.id}
+                    player={player}
+                    devPlan={devPlan}
+                    observations={playerObs}
+                    trend={trend}
+                    onAddObservation={handleAddObservation}
+                  />
+                );
+              })
+            )}
+          </div>
         </div>
       )}
 
@@ -326,22 +354,27 @@ function PracticeContent() {
       {activeTab === 'drills' && (
         <div>
           {/* Search */}
-          <input
-            type="text"
-            value={drillSearch}
-            onChange={(e) => setDrillSearch(e.target.value)}
-            placeholder="Search drills..."
-            className="w-full bg-slate-800 rounded-lg px-4 py-3 text-white placeholder:text-slate-400 mb-3 min-h-[44px]"
-          />
+          <div className="relative mb-3">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none">
+              {'\u{1F50D}'}
+            </span>
+            <input
+              type="text"
+              value={drillSearch}
+              onChange={(e) => setDrillSearch(e.target.value)}
+              placeholder="Search drills..."
+              className="w-full bg-slate-800 border border-slate-700/50 rounded-xl pl-10 pr-4 py-3 text-white placeholder:text-slate-500 min-h-[44px] focus:border-blue-500/50 focus:outline-none transition-colors"
+            />
+          </div>
 
           {/* Skill area filter pills */}
           <div className="flex gap-2 overflow-x-auto pb-3 mb-3 -mx-4 px-4 scrollbar-hide">
             <button
               onClick={() => setDrillFilter('all')}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm touch-manipulation min-h-[36px] ${
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium touch-manipulation min-h-[36px] transition-all ${
                 drillFilter === 'all'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                  : 'bg-slate-800 text-slate-400 border border-slate-700/50 hover:bg-slate-700'
               }`}
             >
               All
@@ -350,10 +383,10 @@ function PracticeContent() {
               <button
                 key={area}
                 onClick={() => setDrillFilter(area)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm touch-manipulation min-h-[36px] ${
+                className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium touch-manipulation min-h-[36px] transition-all ${
                   drillFilter === area
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700/50 hover:bg-slate-700'
                 }`}
               >
                 {skillAreaLabels[area]}
@@ -361,10 +394,15 @@ function PracticeContent() {
             ))}
           </div>
 
+          {/* Count label */}
+          <p className="text-sm text-slate-500 mb-3">{drillCountLabel}</p>
+
           {/* Drill list */}
           {filteredDrills.length === 0 ? (
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 text-center">
-              <p className="text-slate-400">No drills found.</p>
+            <div className="bg-slate-800/30 border border-dashed border-slate-700 rounded-xl p-10 text-center">
+              <div className="text-5xl mb-3 opacity-30">{'\u{1F3AF}'}</div>
+              <p className="text-slate-400 text-lg mb-1">No drills found</p>
+              <p className="text-slate-500 text-sm">Try a different search or filter</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -378,37 +416,42 @@ function PracticeContent() {
 
       {/* Generate Plan Modal */}
       {showGenerateModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4 text-white">Generate Practice Plan</h2>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowGenerateModal(false)}>
+          <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-md border border-slate-700/50 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="text-center mb-6">
+              <div className="text-4xl mb-2">{'\u{1F4CB}'}</div>
+              <h2 className="text-xl font-bold text-white">New Practice Plan</h2>
+              <p className="text-sm text-slate-400 mt-1">AI-generated based on player development needs</p>
+            </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">Duration</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Duration</label>
                 <div className="flex gap-2">
                   {([60, 90, 120] as PracticeDuration[]).map((d) => (
                     <button
                       key={d}
                       onClick={() => setGenDuration(d)}
-                      className={`flex-1 py-3 rounded-lg font-medium touch-manipulation min-h-[44px] ${
+                      className={`flex-1 py-3 rounded-xl font-medium touch-manipulation min-h-[44px] transition-all ${
                         genDuration === d
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-400/30'
                           : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                       }`}
                     >
-                      {d} min
+                      <div className="text-lg font-bold">{d}</div>
+                      <div className="text-xs opacity-70">minutes</div>
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">Date</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Date</label>
                 <input
                   type="date"
                   value={genDate}
                   onChange={(e) => setGenDate(e.target.value)}
-                  className="w-full bg-slate-700 rounded-lg px-4 py-3 text-white min-h-[44px]"
+                  className="w-full bg-slate-700 border border-slate-600/50 rounded-xl px-4 py-3 text-white min-h-[44px] focus:border-blue-500/50 focus:outline-none"
                 />
               </div>
             </div>
@@ -416,16 +459,21 @@ function PracticeContent() {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowGenerateModal(false)}
-                className="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-medium touch-manipulation min-h-[44px]"
+                className="flex-1 bg-slate-700 hover:bg-slate-600 py-3.5 rounded-xl font-medium touch-manipulation min-h-[44px] transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleGeneratePlan}
                 disabled={isGenerating}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 py-3 rounded-lg font-medium touch-manipulation min-h-[44px]"
+                className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-40 disabled:hover:from-blue-600 disabled:hover:to-blue-500 py-3.5 rounded-xl font-bold touch-manipulation min-h-[44px] transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98]"
               >
-                {isGenerating ? 'Generating...' : 'Generate'}
+                {isGenerating ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="animate-spin inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                    Generating...
+                  </span>
+                ) : 'Generate'}
               </button>
             </div>
           </div>
@@ -437,7 +485,14 @@ function PracticeContent() {
 
 export default function PracticePage() {
   return (
-    <Suspense fallback={<div className="p-6 text-slate-400">Loading...</div>}>
+    <Suspense fallback={
+      <div className="p-6 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin inline-block w-8 h-8 border-3 border-slate-600 border-t-blue-500 rounded-full mb-3" />
+          <p className="text-slate-400">Loading practice data...</p>
+        </div>
+      </div>
+    }>
       <PracticeContent />
     </Suspense>
   );
