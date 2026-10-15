@@ -57,3 +57,5 @@ Risk: someone with a severe allergy may still choose a cross-contact meal. Every
 
 **D17 — Couples mode on one phone.** 2026-10-15. Add people you eat with (nickname + allergies, diet, tastes only). "Who's eating?" on Home combines profiles: allergies/diets are a union (safe for everyone), tastes favor overlap. "Decide together": each person marks the 3 options they'd eat (pass the phone); first shared pick wins, else new options or "just pick for us". Cross-phone sync and remote voting need the server (pending approval).
 
+**D18 — Memory model and server schema.** 2026-10-15. Memories carry subject, topic, value, kind (stated / confirmed / temporary), source and timestamps; guesses are never stored until the user confirms them; rejected guesses are never re-learned. Only questions whose answers change recommendations are asked (no grocery-budget question until grocery planning exists). Server schema uses row-level security with no admin access to private data; admins get aggregates and an audit-logged moderation queue. Nutrition (macros/micros) waits for USDA FoodData Central access — no estimated numbers in the meantime.
+
