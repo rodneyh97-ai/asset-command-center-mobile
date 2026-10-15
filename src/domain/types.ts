@@ -77,6 +77,8 @@ export interface Player {
   coachingTags: CoachingTag[];
   availabilityStatus: AvailabilityStatus;
   notes: string;
+  highlightReelUrl?: string;
+  profileImageUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -133,6 +135,7 @@ export interface Match {
   lineupId: string;
   matchStatus: MatchStatus;
   currentSetNumber: number;
+  filmUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

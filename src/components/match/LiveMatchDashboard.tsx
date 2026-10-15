@@ -13,6 +13,7 @@ import CorrectMatchState from './CorrectMatchState';
 import MatchHistory from './MatchHistory';
 import StatRecorder from './StatRecorder';
 import StatsExportPanel from './StatsExportPanel';
+import HighlightSummary from './HighlightSummary';
 
 interface LiveMatchDashboardProps {
   players: Player[];
@@ -21,7 +22,7 @@ interface LiveMatchDashboardProps {
   liberoIds?: string[];
 }
 
-type ActivePanel = null | 'substitute' | 'libero' | 'playerStatus' | 'rotationPreview' | 'correct' | 'history' | 'stats';
+type ActivePanel = null | 'substitute' | 'libero' | 'playerStatus' | 'rotationPreview' | 'correct' | 'history' | 'stats' | 'highlights';
 
 function isMatchPoint(ourScore: number, opponentScore: number, targetScore: number): 'us' | 'opponent' | null {
   if (ourScore >= targetScore - 1 && ourScore > opponentScore) return 'us';
@@ -284,12 +285,18 @@ export default function LiveMatchDashboard({
           </div>
 
           {/* Match Controls */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => setActivePanel('history')}
               className="bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg text-xs font-medium touch-manipulation"
             >
               History
+            </button>
+            <button
+              onClick={() => setActivePanel('highlights')}
+              className="bg-purple-700 hover:bg-purple-600 text-white py-2 rounded-lg text-xs font-medium touch-manipulation"
+            >
+              Highlights
             </button>
             <button
               onClick={() => {
@@ -475,6 +482,17 @@ export default function LiveMatchDashboard({
           players={players}
           sets={state.sets}
           currentSetIndex={state.currentSetIndex}
+          opponentName={opponentName}
+          onClose={() => setActivePanel(null)}
+        />
+      )}
+
+      {activePanel === 'highlights' && (
+        <HighlightSummary
+          players={players}
+          events={state.eventLog}
+          sets={state.sets}
+          teamName={displayTeamName}
           opponentName={opponentName}
           onClose={() => setActivePanel(null)}
         />
