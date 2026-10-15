@@ -1,10 +1,11 @@
-import { clock } from '../clock';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 
+import { clock } from '../clock';
 import { CRASH_KEY } from '../analytics/crash';
 import type { AnalyticsEvent, AnalyticsName } from '../analytics/events';
 import type { FeedbackKind, MealTime, Setting } from '../engine';
+import { syncReminders } from '../notifications/reminders';
 import { initialState, parseStored, reducer, type Action, type AppState } from './state';
 
 const STORAGE_KEY = 'eatos.state.v1';
@@ -42,6 +43,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { unreadable: _drop, ...clean } = parsed;
         dispatch({ type: 'hydrate', state: clean });
         canPersist.current = true;
+        // Re-apply reminder choices (e.g. after an OS update cleared scheduled notifications).
+        void syncReminders(clean.reminders).catch(() => {});
       } catch {
         // Read failed: run this session in memory only and leave stored data untouched.
         if (!cancelled) dispatch({ type: 'hydrate', state: initialState });
@@ -77,6 +80,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteAllData = useCallback(async () => {
     await AsyncStorage.multiRemove([STORAGE_KEY, BACKUP_KEY, CRASH_KEY]);
+    await syncReminders([]).catch(() => {});
     canPersist.current = true;
     dispatch({ type: 'deleteAll' });
   }, []);

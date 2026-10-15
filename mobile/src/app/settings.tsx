@@ -1,11 +1,12 @@
-import { clock } from '../clock';
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, Share } from 'react-native';
 
+import { clock } from '../clock';
 import { crashSummaryLines, readCrashes } from '../analytics/crash';
 import { summaryText } from '../analytics/events';
 import type { Goal, Profile } from '../engine';
+import { ensurePermission, REMINDER_TIMES, remindersSupported, syncReminders, type ReminderMeal } from '../notifications/reminders';
 import { useStore } from '../store/AppProvider';
 import { Body, Button, Caution, ChipGroup, Heading, MultiChipGroup, Screen, Small } from '../ui/components';
 import { ALLERGENS, BUDGETS, CONSIDERATIONS, CUISINES, DIETS, GOALS, STRUGGLES } from '../ui/labels';
@@ -24,6 +25,7 @@ function confirm(title: string, message: string, ok: string, onOk: () => void) {
 export default function Settings() {
   const { state, dispatch, track, deleteAllData } = useStore();
   const [changingGoal, setChangingGoal] = useState(false);
+  const [reminderNote, setReminderNote] = useState<string | null>(null);
   const p = state.profile;
   if (!p) return <Redirect href="/onboarding" />;
   const hiddenCount = new Set(state.history.filter((e) => e.kind === 'disliked').map((e) => e.mealId)).size;
@@ -62,6 +64,31 @@ export default function Settings() {
 
       <Heading>What makes eating well hard</Heading>
       <MultiChipGroup options={STRUGGLES} value={p.struggles} onChange={(struggles) => update({ struggles })} />
+
+      {remindersSupported ? (
+        <>
+          <Heading>Reminders</Heading>
+          <Small>Optional. One gentle nudge before the meals you choose. Off unless you turn it on.</Small>
+          <MultiChipGroup
+            options={(['breakfast', 'lunch', 'dinner'] as ReminderMeal[]).map((m) => ({
+              value: m,
+              label: `${m[0].toUpperCase()}${m.slice(1)} · ${REMINDER_TIMES[m].label}`,
+            }))}
+            value={state.reminders}
+            onChange={async (meals) => {
+              setReminderNote(null);
+              if (meals.length > state.reminders.length && !(await ensurePermission())) {
+                setReminderNote('Notifications are turned off for EatOS in your phone’s settings.');
+                return;
+              }
+              dispatch({ type: 'setReminders', meals });
+              track('reminders_changed', { count: meals.length });
+              await syncReminders(meals).catch(() => setReminderNote('Couldn’t update reminders. Try again.'));
+            }}
+          />
+          {reminderNote ? <Caution>{reminderNote}</Caution> : null}
+        </>
+      ) : null}
 
       <Heading>Usual budget</Heading>
       <ChipGroup options={BUDGETS} value={p.budget} onChange={(budget) => update({ budget })} />

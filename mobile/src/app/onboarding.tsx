@@ -1,8 +1,8 @@
-import { clock } from '../clock';
 import { Redirect, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
+import { clock } from '../clock';
 import type { Allergen, BudgetTier, Consideration, Cuisine, Diet, Goal, Struggle } from '../engine';
 import { useStore } from '../store/AppProvider';
 import { Body, Button, Caution, ChipGroup, Heading, MultiChipGroup, Screen, Small, Title } from '../ui/components';

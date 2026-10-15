@@ -19,6 +19,10 @@ export interface AppState {
   analytics: AnalyticsEvent[];
   /** The user's plan for their next meal (implementation intention), if any. */
   plan: MealPlan | null;
+  /** Meals the user asked to be reminded about. Empty = reminders off (the default). */
+  reminders: ('breakfast' | 'lunch' | 'dinner')[];
+  /** Weekly reflection: when it last happened / was snoozed until. */
+  checkin: { lastAt: string | null; snoozeUntil: string | null };
   /**
    * Raw stored data we couldn't read (newer app version, corruption). Never persisted
    * as state; the provider copies it to a backup key before anything overwrites it.
@@ -41,6 +45,8 @@ export const initialState: AppState = {
   lastContext: null,
   analytics: [],
   plan: null,
+  reminders: [],
+  checkin: { lastAt: null, snoozeUntil: null },
 };
 
 export type Action =
@@ -54,7 +60,10 @@ export type Action =
   | { type: 'clearHidden' }
   | { type: 'undoAccept'; mealId: string }
   | { type: 'setPlan'; plan: MealPlan }
-  | { type: 'clearPlan' };
+  | { type: 'clearPlan' }
+  | { type: 'setReminders'; meals: AppState['reminders'] }
+  | { type: 'checkinDone'; at: string }
+  | { type: 'checkinSnooze'; until: string };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -94,6 +103,12 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, plan: action.plan };
     case 'clearPlan':
       return { ...state, plan: null };
+    case 'setReminders':
+      return { ...state, reminders: action.meals };
+    case 'checkinDone':
+      return { ...state, checkin: { lastAt: action.at, snoozeUntil: null } };
+    case 'checkinSnooze':
+      return { ...state, checkin: { ...state.checkin, snoozeUntil: action.until } };
     case 'clearHidden':
       return { ...state, history: state.history.filter((e) => e.kind !== 'disliked') };
   }
@@ -134,7 +149,31 @@ export function parseStored(raw: string | null): AppState {
           .slice(-MAX_ANALYTICS)
       : [],
     plan: sanitizePlan(d.plan),
+    reminders: Array.isArray(d.reminders)
+      ? [...new Set(d.reminders.filter((m): m is AppState['reminders'][number] => ['breakfast', 'lunch', 'dinner'].includes(m as string)))]
+      : [],
+    checkin: sanitizeCheckin(d.checkin),
   };
+}
+
+function sanitizeCheckin(raw: unknown): AppState['checkin'] {
+  const ok = (v: unknown) => (typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? v : null);
+  if (!raw || typeof raw !== 'object') return { lastAt: null, snoozeUntil: null };
+  const c = raw as Record<string, unknown>;
+  return { lastAt: ok(c.lastAt), snoozeUntil: ok(c.snoozeUntil) };
+}
+
+/**
+ * Weekly reflection is offered only to people actually using EatOS: at least a week
+ * since they started (or since the last check-in), 3+ decisions, and not snoozed.
+ */
+export function checkinDue(state: AppState, now: Date): boolean {
+  if (!state.profile) return false;
+  const WEEK = 7 * 24 * 60 * 60 * 1000;
+  const since = Date.parse(state.checkin.lastAt ?? state.profile.createdAt);
+  if (Number.isFinite(since) && now.getTime() - since < WEEK) return false;
+  if (state.checkin.snoozeUntil && now.getTime() < Date.parse(state.checkin.snoozeUntil)) return false;
+  return state.history.filter((e) => e.kind === 'accepted').length >= 3;
 }
 
 function sanitizePlan(raw: unknown): MealPlan | null {

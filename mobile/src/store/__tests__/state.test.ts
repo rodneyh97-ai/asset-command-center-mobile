@@ -1,5 +1,6 @@
 import type { FeedbackEvent, Profile } from '../../engine';
 import {
+  checkinDue,
   initialState,
   nextMealSlot,
   parseStored,
@@ -147,5 +148,22 @@ describe('meal planning', () => {
       expect(parseStored(JSON.stringify({ ...initialState, plan: bad })).plan).toBeNull();
     }
   });
+});
+
+describe('weekly check-in timing', () => {
+  const base = (over: object = {}) => ({
+    ...initialState,
+    profile: { ...profile, createdAt: hoursAgo(24 * 8) },
+    history: [1, 2, 3].map((h) => ({ mealId: 'a', kind: 'accepted' as const, at: hoursAgo(h) })),
+    ...over,
+  });
+  it('due after a week of real use', () => expect(checkinDue(base(), NOW)).toBe(true));
+  it('not in the first week', () =>
+    expect(checkinDue(base({ profile: { ...profile, createdAt: hoursAgo(24 * 3) } }), NOW)).toBe(false));
+  it('not for people who barely used the app', () => expect(checkinDue(base({ history: [] }), NOW)).toBe(false));
+  it('not again within a week of the last one', () =>
+    expect(checkinDue(base({ checkin: { lastAt: hoursAgo(24 * 2), snoozeUntil: null } }), NOW)).toBe(false));
+  it('respects "Not now"', () =>
+    expect(checkinDue(base({ checkin: { lastAt: null, snoozeUntil: new Date(NOW.getTime() + 3600_000).toISOString() } }), NOW)).toBe(false));
 });
 

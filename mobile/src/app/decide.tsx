@@ -1,8 +1,8 @@
-import { clock } from '../clock';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { clock } from '../clock';
 import { isSaved, mealTimeFor, recommend, swapsFor, type Recommendation } from '../engine';
 import { useStore } from '../store/AppProvider';
 import { defaultContext, nextMealSlot } from '../store/state';

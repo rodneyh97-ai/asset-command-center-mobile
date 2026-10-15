@@ -21,6 +21,9 @@ export type AnalyticsName =
   | 'plan_followed'
   | 'plan_changed'
   | 'plan_missed'
+  | 'reminders_changed'
+  | 'checkin_completed'
+  | 'checkin_snoozed'
   | 'goal_changed';
 
 export interface AnalyticsEvent {

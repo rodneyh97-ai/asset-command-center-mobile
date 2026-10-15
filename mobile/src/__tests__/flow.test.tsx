@@ -274,3 +274,51 @@ describe('planning the next meal (implementation intentions)', () => {
   });
 });
 
+describe('weekly check-in (motivational-interviewing style)', () => {
+  const seed = async () => {
+    const day = 86400000;
+    await AsyncStorage.setItem(
+      'eatos.state.v1',
+      JSON.stringify({
+        version: 1,
+        profile: { goal: 'eat_better', struggles: ['no_time'], cuisines: [], allergens: [], diets: [], budget: 2, considerations: [], createdAt: new Date(Date.now() - 8 * day).toISOString() },
+        history: [1, 2, 3].map((d) => ({ mealId: 'burrito-bowl', kind: 'accepted', at: new Date(Date.now() - d * day).toISOString() })),
+        lastContext: null,
+        analytics: [],
+      }),
+    );
+  };
+
+  it('asks two questions and only changes focus with consent', async () => {
+    await seed();
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('What made eating the way you want easier this week?');
+    fireEvent.press(screen.getByLabelText('Planning ahead'));
+    await screen.findByText('What got in the way the most?');
+    fireEvent.press(screen.getByLabelText('Tight budget'));
+    await screen.findByText(/Want EatOS to help more with “tight budget”/);
+    fireEvent.press(screen.getByLabelText('Yes, help with that'));
+    await screen.findByText(/See you next week/);
+    const s = JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!);
+    expect(s.profile.struggles).toEqual(['no_time', 'budget']);
+    expect(s.checkin.lastAt).toBeTruthy();
+  });
+
+  it('"No thanks" leaves preferences untouched', async () => {
+    await seed();
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByLabelText('Quick ideas'));
+    fireEvent.press(await screen.findByLabelText('Tight budget'));
+    fireEvent.press(await screen.findByLabelText('No thanks'));
+    await screen.findByText(/See you next week/);
+    expect(JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!).profile.struggles).toEqual(['no_time']);
+  });
+
+  it('"Not now" hides it', async () => {
+    await seed();
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByLabelText('Not now, ask me later'));
+    await waitFor(() => expect(screen.queryByText(/easier this week/)).toBeNull());
+  });
+});
+

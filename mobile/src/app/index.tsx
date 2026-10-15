@@ -1,13 +1,14 @@
-import { clock } from '../clock';
 import { Redirect, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { clock } from '../clock';
 import { CATALOG, mealTimeFor, safetyCheck, type MealIdea } from '../engine';
 import { useStore } from '../store/AppProvider';
-import { defaultContext, nextMealSlot, pendingRating, planStatus, quickPicksFor, weeklyReflection, type SavedContext } from '../store/state';
+import { checkinDue, defaultContext, nextMealSlot, pendingRating, planStatus, quickPicksFor, weeklyReflection, type SavedContext } from '../store/state';
 import { Body, Button, Card, Cautions, ChipGroup, Heading, Screen, Small, TextAction, Title } from '../ui/components';
 import { BUDGETS, BUDGET_SHORT, FEELINGS, HUNGER, SETTINGS, TIMES } from '../ui/labels';
+import { WeeklyCheckIn } from '../ui/CheckIn';
 import { space, useColors } from '../ui/theme';
 
 const GREETING = { breakfast: 'Good morning.', lunch: 'Lunchtime.', dinner: 'Dinnertime.', snack: 'Hungry?' };
@@ -16,6 +17,8 @@ export default function Home() {
   const { state, ready, dispatch, track, feedback } = useStore();
   const c = useColors();
   const [editing, setEditing] = useState(false);
+  // 'auto' = show when due; 'thanks' = keep visible for its closing message; 'closed' = hidden this visit.
+  const [checkinPhase, setCheckinPhase] = useState<'auto' | 'thanks' | 'closed'>('auto');
   const [confirmation, setConfirmation] = useState<{ text: string; mealId: string } | null>(null);
   const now = clock.now();
 
@@ -35,6 +38,8 @@ export default function Home() {
       dispatch({ type: 'clearPlan' });
     }
   }, [planExpired, dispatch, track]);
+
+  const checkinShown = checkinPhase === 'thanks' || (checkinPhase === 'auto' && ready && checkinDue(state, now));
 
   if (!ready) return null;
   if (!profile) return <Redirect href="/onboarding" />;
@@ -62,6 +67,7 @@ export default function Home() {
   };
 
   const plan = state.plan && !planExpired ? state.plan : null;
+
   const planMeal = plan ? CATALOG.find((m) => m.id === plan.mealId) : undefined;
   const planSafety = plan && planMeal ? safetyCheck(planMeal, profile, plan.setting) : null;
   const planDue = plan ? planStatus(plan, now) === 'due' : false;
@@ -229,6 +235,10 @@ export default function Home() {
             </View>
           ))}
         </View>
+      ) : null}
+
+      {checkinShown ? (
+        <WeeklyCheckIn onDone={() => setCheckinPhase('thanks')} onClose={() => setCheckinPhase('closed')} />
       ) : null}
 
       {week.decisions > 0 ? (
