@@ -9,7 +9,9 @@ Onboarding, saved preferences, daily decision, rules engine, feedback, one-tap r
 **Remaining before testers:**
 - [ ] Run on a real iPhone and Android device (Expo Go), with VoiceOver/TalkBack pass
 - [ ] App icon, splash, bundle identifiers (needs founder decisions)
-- [ ] Expand catalog to ~80 patterns, especially breakfast, vegetarian takeout, and allergy-friendly options
+- [x] Close coverage gaps (58 patterns; 0% no-fit across 12 user types) — expand toward ~80 for variety
+- [x] Crash capture (on-device), privacy manifest config, privacy policy draft, device checklist
+- [ ] Founder sign-off on the three-tier allergen model (DECISIONS D9)
 - [ ] Optional daily reminder (user-chosen time, off by default) via expo-notifications
 - [ ] Founder review of every catalog entry (allergen tags especially)
 

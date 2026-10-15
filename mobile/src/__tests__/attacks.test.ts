@@ -6,6 +6,17 @@ import { sanitizeIncomingPath } from '../security/links';
 import { initialState, parseStored, quickPicksFor, SCHEMA_VERSION } from '../store/state';
 
 const NOW = new Date('2026-10-15T12:30:00');
+const ALLERGEN_LABEL_RE: Record<Allergen, string> = {
+  peanut: 'peanut',
+  tree_nut: 'tree nut',
+  dairy: 'dairy',
+  egg: 'egg',
+  gluten: 'gluten',
+  soy: 'soy',
+  fish: 'fish',
+  shellfish: 'shellfish',
+  sesame: 'sesame',
+};
 
 const profile = (over: Partial<Profile> = {}): Profile => ({
   goal: 'eat_better',
@@ -62,6 +73,14 @@ describe('ATTACK: bypass allergy filtering', () => {
         expect(m.contains.filter((a) => p.allergens.includes(a))).toEqual([]);
         if (ctx.setting !== 'home' && ctx.setting !== 'work') {
           expect(m.mayContain.filter((a) => p.allergens.includes(a))).toEqual([]);
+          const soft = [...Object.keys(m.removable ?? {}), ...(m.crossContact ?? [])].filter((a) =>
+            p.allergens.includes(a as Allergen),
+          );
+          for (const a of soft) expect(rec!.cautions.join(' ')).toMatch(new RegExp(ALLERGEN_LABEL_RE[a as Allergen], 'i'));
+        }
+        for (const a of Object.keys(m.removable ?? {}).filter((x) => p.allergens.includes(x as Allergen))) {
+          expect(rec!.cautions.join(' ')).toMatch(/order it without|leave out/i);
+          void a;
         }
         expect(violatesDiet(m, p)).toBe(false);
         // A user-visible caution must exist for any uncertain allergen.
@@ -104,7 +123,8 @@ describe('ATTACK: bypass allergy filtering', () => {
       // Swaps are separately filtered; the main text must be fully tagged.
       const text = `${m.name}. ${m.summary} ${m.howTo}`.replace(/sunflower seed butter/gi, '');
       for (const [re, a] of words) {
-        if (re.test(text) && ![...m.contains, ...m.mayContain].includes(a)) problems.push(`${m.id}: ${a}`);
+        const tagged = [...m.contains, ...m.mayContain, ...Object.keys(m.removable ?? {}), ...(m.crossContact ?? [])];
+        if (re.test(text) && !tagged.includes(a)) problems.push(`${m.id}: ${a}`);
       }
     }
     expect(problems).toEqual([]);

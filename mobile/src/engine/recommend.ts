@@ -102,16 +102,30 @@ interface Eligibility {
  */
 export function safetyCheck(meal: MealIdea, profile: Profile, setting: Setting): Eligibility {
   if (violatesDiet(meal, profile)) return { ok: false, cautions: [] };
+  const mine = (xs: readonly Allergen[] | undefined) => (xs ?? []).filter((a) => profile.allergens.includes(a));
   // A known allergen in the standard version always excludes.
-  if (meal.contains.some((a) => profile.allergens.includes(a))) return { ok: false, cautions: [] };
-  const uncertain = meal.mayContain.filter((a) => profile.allergens.includes(a));
-  if (uncertain.length === 0) return { ok: true, cautions: [] };
-  // Outside the home the user can't read labels or control prep: exclude.
-  if (OUTSIDE_HOME.has(setting)) return { ok: false, cautions: [] };
-  return {
-    ok: true,
-    cautions: [`Check labels: some versions contain ${list(uncertain.map((a) => ALLERGEN_LABEL[a]))}.`],
-  };
+  if (mine(meal.contains).length > 0) return { ok: false, cautions: [] };
+
+  const out = OUTSIDE_HOME.has(setting);
+  const cautions: string[] = [];
+  const hidden = mine(meal.mayContain);
+  if (hidden.length > 0) {
+    // Hidden in recipes/sauces: outside the home the user can't read labels or control prep.
+    if (out) return { ok: false, cautions: [] };
+    cautions.push(`Check labels: some versions contain ${list(hidden.map((a) => ALLERGEN_LABEL[a]))}.`);
+  }
+  const removable = mine(Object.keys(meal.removable ?? {}) as Allergen[]);
+  for (const a of removable) {
+    const how = meal.removable![a]!;
+    cautions.push(out ? `Order it without ${ALLERGEN_LABEL[a]}: ${how}.` : `Leave out the ${ALLERGEN_LABEL[a]}: ${how}.`);
+  }
+  const shared = mine(meal.crossContact);
+  if (out && shared.length > 0) {
+    cautions.push(
+      `Usually made without ${list(shared.map((a) => ALLERGEN_LABEL[a]))}, but shared kitchens can’t rule out cross-contact.`,
+    );
+  }
+  return { ok: true, cautions };
 }
 
 function checkHardConstraints(
@@ -142,9 +156,9 @@ export function standingCautions(profile: Profile, ctx: Context): string[] {
   const out: string[] = [];
   if (profile.allergens.length > 0 && OUTSIDE_HOME.has(ctx.setting)) {
     out.push(
-      `Recipes and shared kitchens vary. Tell staff about your ${list(
+      `Tell staff about your ${list(
         profile.allergens.map((a) => ALLERGEN_LABEL[a]),
-      )} allergy and confirm before ordering. EatOS can't verify restaurant ingredients.`,
+      )} allergy and confirm before ordering. EatOS can’t verify restaurant ingredients.`,
     );
   }
   if (profile.considerations.includes('medical')) {

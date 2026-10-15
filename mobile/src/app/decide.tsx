@@ -5,7 +5,7 @@ import { Pressable, View } from 'react-native';
 import { isSaved, mealTimeFor, recommend, swapsFor, type Recommendation } from '../engine';
 import { useStore } from '../store/AppProvider';
 import { defaultContext } from '../store/state';
-import { Body, Button, Card, Caution, Heading, Screen, Small, Title } from '../ui/components';
+import { Body, Button, Card, Cautions, Heading, Screen, Small, TextAction, Title } from '../ui/components';
 import { BUDGET_SHORT } from '../ui/labels';
 import { space, useColors } from '../ui/theme';
 
@@ -81,9 +81,7 @@ export default function Decide() {
           <Heading>How to do it</Heading>
           <Body>{chosen.meal.howTo}</Body>
         </Card>
-        {chosen.cautions.map((t) => (
-          <Caution key={t}>{t}</Caution>
-        ))}
+        <Cautions items={chosen.cautions} />
       </Screen>
     );
   }
@@ -131,27 +129,19 @@ export default function Decide() {
       }
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={12} style={{ minHeight: 44, justifyContent: 'center' }}>
-          <Small muted={false}>‹ Back</Small>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Not for me: never suggest ${primary.meal.name} again`}
+        <TextAction label="‹ Back" a11yLabel="Back" onPress={() => router.back()} />
+        <TextAction
+          label="Not for me"
+          a11yLabel={`Not for me: never suggest ${primary.meal.name} again`}
           onPress={() => dislike(primary)}
-          hitSlop={12}
-          style={{ minHeight: 44, justifyContent: 'center' }}
-        >
-          <Small muted={false}>Not for me</Small>
-        </Pressable>
+        />
       </View>
 
       <Small>Your best option right now</Small>
       <Title>{primary.meal.name}</Title>
       <Body muted>{primary.meal.summary}</Body>
 
-      {primary.cautions.map((t) => (
-        <Caution key={t}>{t}</Caution>
-      ))}
+      <Cautions items={primary.cautions} />
 
       <Card>
         <Heading>Why this fits</Heading>

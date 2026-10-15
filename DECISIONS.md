@@ -28,3 +28,13 @@
 - Crash screen with "Try again" / "Start fresh (keeps a backup)".
 - Remaining `npm audit` findings (braces, node-forge, sprintf-js, uuid) are in build tooling only and are not in the shipped app bundle (verified by inspecting the bundle).
 
+**D9 — Three-tier allergen model (NEEDS FOUNDER SIGN-OFF).** 2026-10-15.
+Previously every "maybe" allergen was excluded when eating out, which left users with a gluten allergy no option that fit the meal time in 43% of situations (vegan + gluten-free: 60%). Now:
+- `mayContain`: hidden in recipes/sauces → still **never** shown when eating out.
+- `removable`: a visible optional topping (cheese on a bowl) → shown with "Order it without dairy: skip the cheese and sour cream."
+- `crossContact`: not in the dish, but shared kitchen → shown when eating out with "Usually made without gluten, but shared kitchens can't rule out cross-contact," plus the standing "tell staff… EatOS can't verify" note.
+Result: 0% "no fitting option" across 12 user types × 320 situations (enforced by `coverage.test.ts`).
+Risk: someone with a severe allergy may still choose a cross-contact meal. Every such meal carries both warnings. Alternative if rejected: add a "severe allergy" toggle that restores the strict behaviour for that user.
+
+**D10 — On-device crash capture instead of a crash service (for now).** Errors are recorded locally (capped, truncated) and included in the user-shared summary. Sentry is the upgrade path once you approve a new service. 2026-10-15.
+

@@ -15,6 +15,7 @@ export type AnalyticsName =
   | 'meal_saved'
   | 'meal_disliked'
   | 'repeat_meal'
+  | 'repeat_undone'
   | 'meal_rated'
   | 'goal_changed';
 
@@ -53,10 +54,10 @@ export function summarize(events: AnalyticsEvent[], now: Date) {
     returnedDay1: activeDayIdx.has(1),
     returnedDay7: [...activeDayIdx].some((d) => d >= 6 && d <= 8),
     returnedDay30: [...activeDayIdx].some((d) => d >= 28 && d <= 32),
-    decisions: accepted.length + by('repeat_meal').length,
+    decisions: accepted.length + by('repeat_meal').length - by('repeat_undone').length,
     acceptanceRate: shown ? Math.round((accepted.length / shown) * 100) / 100 : null,
     medianSecondsToDecision: decisionMs.length ? Math.round(median(decisionMs)! / 1000) : null,
-    repeats: by('repeat_meal').length,
+    repeats: by('repeat_meal').length - by('repeat_undone').length,
     swaps: by('recommendation_swapped').length,
     emptyResults: by('recommendation_empty').length,
     lovedRatings: ratings.filter((e) => e.props?.rating === 'loved').length,

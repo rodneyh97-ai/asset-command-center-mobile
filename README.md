@@ -33,3 +33,5 @@ npm run lint
 | `ROADMAP.md` | Phases and what's next |
 | `DECISIONS.md` | Key decisions and their reasoning |
 | `TEST_PLAN.md` | What's tested, what isn't |
+| `DEVICE_TEST_CHECKLIST.md` | 20-minute checklist to run on real phones |
+| `PRIVACY_POLICY.md` | Draft privacy policy (needs review before publishing) |

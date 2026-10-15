@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { radius, space, TOUCH, type, useColors } from './theme';
@@ -8,7 +8,12 @@ export function Screen({ children, footer }: { children: ReactNode; footer?: Rea
   const c = useColors();
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top', 'left', 'right', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        // Lets keyboard users focus and scroll long screens on web; ignored by screen readers' touch flow.
+        focusable={Platform.OS === 'web'}
+      >
         {children}
       </ScrollView>
       {footer ? <View style={[styles.footer, { borderTopColor: c.border, backgroundColor: c.background }]}>{footer}</View> : null}
@@ -185,6 +190,38 @@ export function Caution({ children }: { children: ReactNode }) {
   );
 }
 
+/** All safety notes for one meal in a single box, so they inform without burying the recommendation. */
+export function Cautions({ items }: { items: string[] }) {
+  const c = useColors();
+  if (items.length === 0) return null;
+  if (items.length === 1) return <Caution>{items[0]}</Caution>;
+  return (
+    <View style={[styles.caution, { backgroundColor: c.cautionBg, gap: space.xs }]} accessibilityRole="alert">
+      <Text style={[type.small, { color: c.cautionText, fontWeight: '700' }]}>⚠︎ Before you eat</Text>
+      {items.map((t) => (
+        <Text key={t} style={[type.small, { color: c.cautionText, fontWeight: '600' }]}>
+          • {t}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+/** Small text-style action (Back, Preferences) with a full-size touch target. */
+export function TextAction({ label, onPress, a11yLabel }: { label: string; onPress: () => void; a11yLabel?: string }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel ?? label}
+      onPress={onPress}
+      hitSlop={8}
+      style={({ pressed }) => [styles.textAction, { opacity: pressed ? 0.6 : 1 }]}
+    >
+      <Small muted={false}>{label}</Small>
+    </Pressable>
+  );
+}
+
 export function Gap({ size = space.lg }: { size?: number }) {
   return <View style={{ height: size }} />;
 }
@@ -213,4 +250,5 @@ const styles = StyleSheet.create({
   group: { gap: space.sm },
   card: { borderRadius: radius.lg, borderWidth: 1, padding: space.lg, gap: space.md },
   caution: { borderRadius: radius.sm, padding: space.md },
+  textAction: { minHeight: TOUCH, minWidth: TOUCH, justifyContent: 'center', paddingHorizontal: space.xs },
 });

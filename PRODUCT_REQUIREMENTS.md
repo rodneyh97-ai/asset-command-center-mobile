@@ -28,6 +28,6 @@ A useful answer to "what should I eat right now?" in under 15 seconds, with no l
 Calorie/macro tracking, barcode/photo logging, restaurant-specific menus, social features, AI chat.
 
 ## Known product risks (KillCritic)
-- **Generic suggestions feel like a listicle.** The catalog has 40 meal patterns; repeat users will hit its edges in about 2 weeks. Biggest risk to retention.
+- **Generic suggestions feel like a listicle.** The catalog has 58 meal patterns; repeat users will hit its edges within a few weeks. Biggest risk to retention.
 - **Eating out is the hardest moment** and the one where we can say the least without licensed menu data.
 - **Free alternatives exist** (ChatGPT, "what's for dinner" lists). The edge must be speed, memory of the user, and trust, not content.

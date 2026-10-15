@@ -5,13 +5,14 @@
 mobile/                      Expo SDK 57 · React Native 0.86 · TypeScript · Expo Router
   src/engine/                Pure TS recommendation engine (no React). Reusable on server/web later.
     types.ts                 Domain model
-    catalog.ts               40 curated meal patterns with allergen + diet facts
+    catalog.ts               58 curated meal patterns; allergens tiered contains / mayContain / removable / crossContact
     recommend.ts             Hard filters → scoring → explanations → cautions; shared safetyCheck()
     validate.ts              Field-by-field validation of anything read from storage
   src/security/links.ts      Deep-link allowlist (used by src/app/+native-intent.tsx)
   vendor/decode-uri-component  Patched link decoder (see DECISIONS D8)
   src/store/                 App state (pure reducer) + AsyncStorage persistence (on-device only)
   src/analytics/events.ts    Privacy-first local event log + validation metrics
+  src/analytics/crash.ts     On-device crash capture (global handler + error screen)
   src/ui/                    Design tokens (light/dark), reusable components, labels
   src/app/                   Screens: onboarding, index (home), decide, settings
 ```

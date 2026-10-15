@@ -1,5 +1,5 @@
 import type { FeedbackEvent, Profile } from '../../engine';
-import { initialState, parseStored, pendingRating, recentMealIds, reducer, weeklyReflection } from '../state';
+import { initialState, parseStored, pendingRating, quickPicksFor, recentMealIds, reducer, weeklyReflection } from '../state';
 
 const NOW = new Date('2026-10-15T18:00:00Z');
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3600_000).toISOString();
@@ -34,6 +34,17 @@ describe('reducer', () => {
     let s = reducer(initialState, { type: 'completeOnboarding', profile });
     s = reducer(s, { type: 'feedback', mealId: 'x', kind: 'saved', at: NOW.toISOString() });
     expect(reducer(s, { type: 'deleteAll' })).toEqual(initialState);
+  });
+});
+
+describe('undo', () => {
+  it('removes only the most recent accept of that meal', () => {
+    let s = reducer(initialState, { type: 'feedback', mealId: 'a', kind: 'accepted', at: hoursAgo(30) });
+    s = reducer(s, { type: 'feedback', mealId: 'a', kind: 'saved', at: hoursAgo(29) });
+    s = reducer(s, { type: 'feedback', mealId: 'a', kind: 'accepted', at: hoursAgo(1) });
+    s = reducer(s, { type: 'undoAccept', mealId: 'a' });
+    expect(s.history.map((e) => e.kind)).toEqual(['accepted', 'saved']);
+    expect(reducer(s, { type: 'undoAccept', mealId: 'zzz' })).toBe(s);
   });
 });
 
@@ -84,3 +95,16 @@ describe('retention helpers', () => {
     expect(weeklyReflection(h, NOW)).toEqual({ decisions: 3, activeDays: 3 });
   });
 });
+
+describe('quick picks', () => {
+  it('only offers meals possible where the user is eating', () => {
+    const h: FeedbackEvent[] = [
+      { mealId: 'sheet-pan-chicken', kind: 'saved', at: hoursAgo(5) },
+      { mealId: 'burrito-bowl', kind: 'saved', at: hoursAgo(4) },
+    ];
+    const p = { ...profile, allergens: [] };
+    expect(quickPicksFor(p, h, 'restaurant').map((q) => q.meal.id)).toEqual(['burrito-bowl']);
+    expect(quickPicksFor(p, h, 'home').map((q) => q.meal.id)).toEqual(['sheet-pan-chicken']);
+  });
+});
+

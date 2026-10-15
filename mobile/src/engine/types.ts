@@ -95,8 +95,15 @@ export interface MealIdea {
   highFiber: boolean;
   /** Allergens present in the standard version of this meal. */
   contains: Allergen[];
-  /** Allergens commonly present in some versions, sauces, or via shared prep. */
+  /** Allergens hidden in some versions or sauces — can't be reliably avoided when eating out. */
   mayContain: Allergen[];
+  /**
+   * Allergens in an optional, visible component the user can ask to leave off,
+   * with the instruction to give (e.g. dairy: 'skip the cheese and sour cream').
+   */
+  removable?: Partial<Record<Allergen, string>>;
+  /** Not in the dish itself, but commonly handled in the same kitchen (shared fryers, grills, prep lines). */
+  crossContact?: Allergen[];
   diet: DietFacts;
   /** What to do: how to make it or how to order it. */
   howTo: string;

@@ -51,8 +51,10 @@ describe('catalog integrity', () => {
       expect(m.settings.length).toBeGreaterThan(0);
       expect(m.mealTimes.length).toBeGreaterThan(0);
       expect(m.howTo.length).toBeGreaterThan(10);
-      // An allergen can't be both definite and uncertain.
-      expect(m.contains.filter((a) => m.mayContain.includes(a))).toEqual([]);
+      // Each allergen sits in exactly one bucket.
+      const buckets = [m.contains, m.mayContain, Object.keys(m.removable ?? {}), m.crossContact ?? []];
+      const all = buckets.flat();
+      expect({ id: m.id, dupes: all.filter((a, i) => all.indexOf(a) !== i) }).toEqual({ id: m.id, dupes: [] });
     }
   });
 
@@ -239,8 +241,9 @@ describe('situation fit', () => {
   });
 
   it('is honest when nothing fits', () => {
-    const p = profile({ diets: ['vegan'], allergens: ['soy', 'gluten', 'sesame', 'peanut'] });
-    const r = recommend(p, ctx({ setting: 'restaurant', mealTime: 'breakfast' }), { now: NOW });
+    const p = profile({ allergens: ['peanut'] });
+    const onlyPeanutMeals = CATALOG.filter((m) => m.contains.includes('peanut'));
+    const r = recommend(p, ctx({ mealTime: 'breakfast' }), { now: NOW, catalog: onlyPeanutMeals });
     expect(r.primary).toBeNull();
     expect(r.emptyReason).toMatch(/nothing fits/i);
   });

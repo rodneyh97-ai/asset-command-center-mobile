@@ -5,7 +5,7 @@ import { Pressable, View } from 'react-native';
 import { CATALOG, mealTimeFor, type MealIdea } from '../engine';
 import { useStore } from '../store/AppProvider';
 import { defaultContext, pendingRating, quickPicksFor, weeklyReflection, type SavedContext } from '../store/state';
-import { Body, Button, Card, Caution, ChipGroup, Heading, Screen, Small, Title } from '../ui/components';
+import { Body, Button, Card, Cautions, ChipGroup, Heading, Screen, Small, TextAction, Title } from '../ui/components';
 import { BUDGETS, BUDGET_SHORT, FEELINGS, HUNGER, SETTINGS, TIMES } from '../ui/labels';
 import { space, useColors } from '../ui/theme';
 
@@ -15,7 +15,7 @@ export default function Home() {
   const { state, ready, dispatch, track, feedback } = useStore();
   const c = useColors();
   const [editing, setEditing] = useState(false);
-  const [confirmation, setConfirmation] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<{ text: string; mealId: string } | null>(null);
   const now = new Date();
 
   const profile = state.profile;
@@ -48,7 +48,7 @@ export default function Home() {
     if (confirmation) return; // one repeat per visit; prevents double-tap duplicates
     feedback(m.id, 'accepted');
     track('repeat_meal');
-    setConfirmation(`${m.name} it is. Enjoy.`);
+    setConfirmation({ text: `${m.name} it is. Enjoy.`, mealId: m.id });
   };
 
   const rate = (kind: 'loved' | 'fine' | 'disliked') => {
@@ -61,15 +61,7 @@ export default function Home() {
     <Screen>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <Small>{GREETING[mealTimeFor(now)]}</Small>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Preferences"
-          onPress={() => router.push('/settings')}
-          hitSlop={12}
-          style={{ minHeight: 44, justifyContent: 'center' }}
-        >
-          <Small muted={false}>Preferences</Small>
-        </Pressable>
+        <TextAction label="Preferences" onPress={() => router.push('/settings')} />
       </View>
 
       <Title>What should I eat?</Title>
@@ -117,7 +109,20 @@ export default function Home() {
 
       <Button big label="Help me decide" onPress={decide} hint="Shows one recommendation and two alternatives" />
 
-      {confirmation ? <Body>{confirmation}</Body> : null}
+      {confirmation ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Body style={{ flex: 1 }}>{confirmation.text}</Body>
+          <TextAction
+            label="Undo"
+            a11yLabel="Undo, I’m not having this"
+            onPress={() => {
+              dispatch({ type: 'undoAccept', mealId: confirmation.mealId });
+              track('repeat_undone');
+              setConfirmation(null);
+            }}
+          />
+        </View>
+      ) : null}
 
       {quickPicks.length > 0 ? (
         <View style={{ gap: space.sm }}>
@@ -144,9 +149,7 @@ export default function Home() {
                 <Body>{m.name}</Body>
                 <Small>{saved ? 'Saved' : 'Recent'} · tap to have it again</Small>
               </Pressable>
-              {cautions.map((t) => (
-                <Caution key={t}>{t}</Caution>
-              ))}
+              <Cautions items={cautions} />
             </View>
           ))}
         </View>

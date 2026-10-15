@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 
+import { CRASH_KEY } from '../analytics/crash';
 import type { AnalyticsEvent, AnalyticsName } from '../analytics/events';
 import type { FeedbackKind } from '../engine';
 import { initialState, parseStored, reducer, type Action, type AppState } from './state';
@@ -71,7 +72,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteAllData = useCallback(async () => {
-    await AsyncStorage.multiRemove([STORAGE_KEY, BACKUP_KEY]);
+    await AsyncStorage.multiRemove([STORAGE_KEY, BACKUP_KEY, CRASH_KEY]);
     canPersist.current = true;
     dispatch({ type: 'deleteAll' });
   }, []);

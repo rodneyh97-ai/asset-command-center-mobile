@@ -2,6 +2,7 @@ import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, Share } from 'react-native';
 
+import { crashSummaryLines, readCrashes } from '../analytics/crash';
 import { summaryText } from '../analytics/events';
 import type { Goal, Profile } from '../engine';
 import { useStore } from '../store/AppProvider';
@@ -92,7 +93,11 @@ export default function Settings() {
         label="Share my usage summary"
         variant="secondary"
         hint="Opens the share sheet with counts only — no allergies, diets, or meals"
-        onPress={() => Share.share({ message: summaryText(state.analytics, new Date()) })}
+        onPress={async () => {
+          const crashes = await readCrashes();
+          const message = [summaryText(state.analytics, new Date()), ...crashSummaryLines(crashes)].join('\n');
+          await Share.share({ message }).catch(() => {});
+        }}
       />
       <Button
         label="Delete all my data"

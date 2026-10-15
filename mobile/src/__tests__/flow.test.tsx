@@ -88,7 +88,9 @@ describe('core daily flow', () => {
     await waitFor(() => expect(titles()).not.toEqual(first));
   });
 
-  it('accepted meal appears in "Have again" for one-tap repeat', async () => {
+  const stored = async () => JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!);
+
+  it('accepted meal appears in "Have again" for one-tap repeat, with undo', async () => {
     await onboard();
     fireEvent.press(screen.getByLabelText('Help me decide'));
     await screen.findByText('Your best option right now');
@@ -98,6 +100,12 @@ describe('core daily flow', () => {
     fireEvent.press(done);
     await screen.findByText('Have again');
     jest.restoreAllMocks();
+    // One-tap repeat, then undo an accidental tap.
+    const before = (await stored()).history.length;
+    fireEvent.press(screen.getAllByLabelText(/^Have .* again$/)[0]);
+    await screen.findByText(/it is\. Enjoy\./);
+    fireEvent.press(screen.getByLabelText('Undo, I’m not having this'));
+    await waitFor(async () => expect((await stored()).history.length).toBe(before));
   });
 
   it('delete all data returns to onboarding', async () => {

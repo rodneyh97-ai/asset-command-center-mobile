@@ -40,7 +40,8 @@ export type Action =
   | { type: 'feedback'; mealId: string; kind: FeedbackKind; at: string }
   | { type: 'track'; event: AnalyticsEvent }
   | { type: 'deleteAll' }
-  | { type: 'clearHidden' };
+  | { type: 'clearHidden' }
+  | { type: 'undoAccept'; mealId: string };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -62,6 +63,11 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, analytics: [...state.analytics, action.event].slice(-MAX_ANALYTICS) };
     case 'deleteAll':
       return initialState;
+    case 'undoAccept': {
+      const i = state.history.map((e) => e.mealId === action.mealId && e.kind === 'accepted').lastIndexOf(true);
+      if (i === -1) return state;
+      return { ...state, history: [...state.history.slice(0, i), ...state.history.slice(i + 1)] };
+    }
     case 'clearHidden':
       return { ...state, history: state.history.filter((e) => e.kind !== 'disliked') };
   }
@@ -110,13 +116,13 @@ export interface QuickPick {
   cautions: string[];
 }
 
-/** Saved + recent meals for one-tap repeat, re-checked against today's allergies, diet, and setting. */
+/** Saved + recent meals for one-tap repeat that are possible where the user is and safe for them today. */
 export function quickPicksFor(profile: Profile, history: FeedbackEvent[], setting: Setting, limit = 4): QuickPick[] {
   const ids = [...CATALOG.filter((m) => isSaved(m.id, history)).map((m) => m.id), ...recentMealIds(history)];
   const out: QuickPick[] = [];
   for (const id of new Set(ids)) {
     const meal = CATALOG.find((m) => m.id === id);
-    if (!meal) continue;
+    if (!meal || !meal.settings.includes(setting)) continue; // only meals possible where the user is
     const safety = safetyCheck(meal, profile, setting);
     if (!safety.ok) continue;
     out.push({ meal, saved: isSaved(id, history), cautions: safety.cautions });
