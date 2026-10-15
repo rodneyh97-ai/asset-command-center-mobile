@@ -1,0 +1,9 @@
+{"elements":[
+ {"type":"node","id":1,"lat":39.10,"lon":-94.58,"tags":{"amenity":"restaurant","name":"Joe's Tacos","cuisine":"mexican;tex-mex; Burger ","addr:street":"Main St","addr:housenumber":"12","addr:city":"Kansas City"}},
+ {"type":"way","id":2,"center":{"lat":39.05,"lon":-94.60},"tags":{"shop":"supermarket","name":"Hy-Vee","brand":"Hy-Vee"}},
+ {"type":"node","id":3,"lat":39.11,"lon":-94.57,"tags":{"amenity":"cafe","brand":"Starbucks"}},
+ {"type":"node","id":4,"lat":39.12,"lon":-94.56,"tags":{"amenity":"bank","name":"A Bank"}},
+ {"type":"node","id":5,"lat":39.12,"lon":-94.56,"tags":{"amenity":"restaurant"}},
+ {"type":"way","id":6,"tags":{"amenity":"fast_food","name":"No Coords"}},
+ {"type":"node","id":7,"lat":38.0,"lon":-94.0,"tags":{"shop":"convenience","name":"Far Away Stop"}}
+]}
