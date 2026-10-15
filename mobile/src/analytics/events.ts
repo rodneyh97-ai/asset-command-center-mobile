@@ -34,6 +34,7 @@ export type AnalyticsName =
   | 'app_lock_changed'
   | 'member_saved'
   | 'question_answered'
+  | 'meal_logged'
   | 'goal_changed';
 
 export interface AnalyticsEvent {

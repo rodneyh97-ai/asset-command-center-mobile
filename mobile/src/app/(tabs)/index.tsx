@@ -3,11 +3,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { clock } from '../../clock';
-import { CATALOG, mealTimeFor, nextQuestion, safetyCheck, valuesOf, type MealIdea } from '../../engine';
+import { CATALOG, dislikedFoodIn, mealTimeFor, nextQuestion, safetyCheck, valuesOf, type MealIdea } from '../../engine';
 import { useActiveProfile } from '../../store/useActiveProfile';
 import { useStore } from '../../store/AppProvider';
 import {
   checkinDue,
+  lastMeals,
+  whenLabel,
   memoriesNow,
   defaultContext,
   nextMealSlot,
@@ -82,6 +84,11 @@ export default function Home() {
   const pending = pendingRating(state.history, now);
   const pendingMeal = pending ? CATALOG.find((m) => m.id === pending.mealId) : undefined;
   const week = weeklyReflection(state.history, now);
+
+  const recent = lastMeals(state.history, 4);
+  const memories = memoriesNow(state, now);
+  // Favorites are saved meals not already shown in "Your last meals".
+  const favorites = quickPicks.filter((q) => q.saved && !recent.some((e) => e.mealId === q.meal.id)).slice(0, 3);
 
   // At most one card asking something of the user at a time.
   const question =
@@ -272,10 +279,40 @@ export default function Home() {
         />
       ) : null}
 
-      {quickPicks.length > 0 ? (
+      {recent.length > 0 ? (
         <View style={{ gap: space.sm }}>
-          <Heading>Have again</Heading>
-          {quickPicks.map(({ meal: m, saved, cautions }) => (
+          <Row style={{ justifyContent: 'space-between' }}>
+            <Heading>Your last meals</Heading>
+            <TextAction label="All" a11yLabel="See full history" onPress={() => router.push('/history')} />
+          </Row>
+          {recent.map((e) => {
+            const m = CATALOG.find((x) => x.id === e.mealId);
+            const withNames = (e.with ?? []).map((id) => state.members.find((x) => x.id === id)?.name).filter(Boolean);
+            const again = m && m.settings.includes(ctx.setting) && safetyCheck(m, profile, ctx.setting).ok && !dislikedFoodIn(m, memories);
+            return (
+              <Row key={`${e.mealId}-${e.at}`} gap={space.md}>
+                {m ? <MealArt meal={m} variant="small" /> : <View style={{ width: 52, height: 52, borderRadius: 10, backgroundColor: c.surfaceMuted }} />}
+                <View style={{ flex: 1 }}>
+                  <Body>{m?.name ?? 'Something not listed'}</Body>
+                  <Small>
+                    {whenLabel(e, now)}
+                    {withNames.length ? ` · with ${withNames.join(' & ')}` : ''}
+                  </Small>
+                </View>
+                {again ? (
+                  <Button label="Again" variant="secondary" a11yLabel={`Have ${m!.name} again`} disabled={!!confirmation} onPress={() => repeat(m!)} />
+                ) : null}
+              </Row>
+            );
+          })}
+        </View>
+      ) : null}
+      <Button label="I ate something else" variant="ghost" icon="create-outline" onPress={() => router.push('/log')} />
+
+      {favorites.length > 0 ? (
+        <View style={{ gap: space.sm }}>
+          <Heading>Your favorites</Heading>
+          {favorites.map(({ meal: m, saved, cautions }) => (
             <View key={m.id} style={{ gap: space.xs }}>
               <Pressable
                 accessibilityRole="button"

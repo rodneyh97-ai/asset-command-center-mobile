@@ -2,7 +2,7 @@
 // EatOS takes no parameters from links, so only exact known screens are allowed
 // and everything else (query strings, unknown paths, oversized input) goes home.
 
-export const ALLOWED_PATHS = ['/', '/decide', '/onboarding', '/history', '/favorites', '/search', '/profile', '/premium', '/knows'] as const;
+export const ALLOWED_PATHS = ['/', '/decide', '/onboarding', '/history', '/favorites', '/search', '/profile', '/premium', '/knows', '/log'] as const;
 const MAX_LENGTH = 256;
 
 const MEAL_PATH = /^\/meal\/[a-z0-9-]{1,60}$/;

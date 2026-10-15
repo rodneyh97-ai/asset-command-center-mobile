@@ -7,7 +7,7 @@ import { crashSummaryLines, readCrashes } from '../../analytics/crash';
 import { summaryText } from '../../analytics/events';
 import { sentryConfigured } from '../../analytics/sentry';
 import { clock } from '../../clock';
-import type { Goal, Member, Profile } from '../../engine';
+import { INGREDIENTS, newMemory, type Goal, type Member, type Profile } from '../../engine';
 import { ensurePermission, REMINDER_TIMES, remindersSupported, syncReminders, type ReminderMeal } from '../../notifications/reminders';
 import { authenticate, canLock, lockSupported } from '../../security/appLock';
 import { useStore } from '../../store/AppProvider';
@@ -32,6 +32,8 @@ import {
 import { ALLERGENS, BUDGETS, CONSIDERATIONS, CUISINES, DIETS, GOAL_LABEL, GOALS, STRUGGLES } from '../../ui/labels';
 import { space, type, useColors } from '../../ui/theme';
 
+const DISLIKE_OPTIONS = INGREDIENTS.map((i) => ({ value: i, label: i[0].toUpperCase() + i.slice(1) }));
+
 function confirm(title: string, message: string, ok: string, onOk: () => void) {
   if (Platform.OS === 'web') {
     if (globalThis.confirm?.(`${title}\n\n${message}`)) onOk();
@@ -48,7 +50,12 @@ export default function ProfileScreen() {
   const c = useColors();
   const [changingGoal, setChangingGoal] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Member | null>(null);
+  const [editing, setEditingRaw] = useState<Member | null>(null);
+  const [editDislikes, setEditDislikes] = useState<string[]>([]);
+  const setEditing = (m: Member | null) => {
+    setEditingRaw(m);
+    if (m && m.id !== editing?.id) setEditDislikes(state.memories.filter((x) => x.subject === m.id && x.topic === 'dislike_food').map((x) => x.value));
+  };
   const p = state.profile;
   if (!ready) return null; // wait for saved data before deciding where to go
   if (!p) return <Redirect href="/onboarding" />;
@@ -146,6 +153,8 @@ export default function ProfileScreen() {
           <MultiChipGroup options={DIETS} value={editing.diets} onChange={(diets) => setEditing({ ...editing, diets })} />
           <Small muted={false}>Foods they enjoy</Small>
           <MultiChipGroup options={CUISINES} value={editing.cuisines} onChange={(cuisines) => setEditing({ ...editing, cuisines })} />
+          <Small muted={false}>Foods they don’t like</Small>
+          <MultiChipGroup options={DISLIKE_OPTIONS} value={editDislikes} onChange={setEditDislikes} />
           <Row>
             <View style={{ flex: 1 }}>
               <Button
@@ -153,6 +162,12 @@ export default function ProfileScreen() {
                 disabled={!editing.name.trim()}
                 onPress={() => {
                   dispatch({ type: 'saveMember', member: { ...editing, name: editing.name.trim() } });
+                  // Their dislikes are memories about them, enforced when you eat together.
+                  const now = clock.now();
+                  for (const m of state.memories.filter((x) => x.subject === editing.id && x.topic === 'dislike_food' && !editDislikes.includes(x.value)))
+                    dispatch({ type: 'forget', id: m.id });
+                  for (const v of editDislikes.filter((v) => !state.memories.some((x) => x.subject === editing.id && x.topic === 'dislike_food' && x.value === v)))
+                    dispatch({ type: 'remember', memory: newMemory('dislike_food', v, { source: 'manual', subject: editing.id, now }) });
                   track('member_saved');
                   setEditing(null);
                 }}

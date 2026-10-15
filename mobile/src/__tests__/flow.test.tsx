@@ -113,7 +113,7 @@ describe('core daily flow', () => {
     const done = await screen.findByLabelText('Done');
     jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000); // a deliberate tap, not a double tap
     fireEvent.press(done);
-    await screen.findByText('Have again');
+    await screen.findByText('Your last meals');
     jest.restoreAllMocks();
     // One-tap repeat, then undo an accidental tap.
     const before = (await stored()).history.length;
@@ -557,5 +557,60 @@ describe('memory & privacy dashboard', () => {
     const data = JSON.parse((spy.mock.calls[0][0] as { message: string }).message);
     expect(Object.keys(data)).toEqual(expect.arrayContaining(['profile', 'memories', 'history', 'peopleYouEatWith', 'settings']));
     spy.mockRestore();
+  });
+});
+
+describe('history people can see', () => {
+  const seed = (over: object = {}) =>
+    AsyncStorage.setItem(
+      'eatos.state.v1',
+      JSON.stringify({
+        version: 1,
+        profile: { goal: 'eat_better', struggles: [], cuisines: [], allergens: [], diets: [], budget: 3, considerations: [], createdAt: new Date().toISOString() },
+        history: [],
+        lastContext: { setting: 'takeout', hunger: 'normal', time: 20, budget: 3, feeling: 'fine' },
+        analytics: [],
+        members: [{ id: 'm-sam', name: 'Sam', allergens: [], diets: [], cuisines: [] }],
+        ...over,
+      }),
+    );
+
+  it('a meal eaten together shows "with Sam" on Home and in History', async () => {
+    await seed({ eatingWith: ['m-sam'] });
+    renderRouter(routes, { initialUrl: '/decide' });
+    fireEvent.press(await screen.findByLabelText('Try this'));
+    await screen.findByText(/^Enjoy your/);
+    screen.unmount();
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('Your last meals');
+    expect(screen.getAllByText(/with Sam/).length).toBeGreaterThan(0);
+    screen.unmount();
+    renderRouter(routes, { initialUrl: '/history' });
+    await screen.findByText('Your meals');
+    expect(screen.getAllByText(/with Sam/).length).toBeGreaterThan(0);
+  });
+
+  it('logging something EatOS didn’t suggest shows up in last meals, and can be deleted', async () => {
+    await seed();
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByLabelText('I ate something else'));
+    fireEvent.press(await screen.findByLabelText('Something not listed'));
+    await screen.findByText('Logged.');
+    screen.unmount();
+    renderRouter(routes, { initialUrl: '/history' });
+    await screen.findByText('Something not listed');
+    expect(screen.getByText(/logged by you/)).toBeTruthy();
+    fireEvent.press(screen.getAllByLabelText(/^Delete meal from/)[0]);
+    await waitFor(() => expect(screen.queryByText('Something not listed')).toBeNull());
+  });
+
+  it('a partner’s disliked food is avoided when eating together', async () => {
+    await seed({
+      eatingWith: ['m-sam'],
+      memories: [{ id: 'mem-1', subject: 'm-sam', topic: 'dislike_food', value: 'rice', kind: 'stated', source: 'manual', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }],
+    });
+    renderRouter(routes, { initialUrl: '/decide' });
+    await screen.findByText('Your Recommendation');
+    for (const m of CATALOG.filter((x) => MEAL_INGREDIENTS[x.id].includes('rice'))) expect(screen.queryByText(m.name)).toBeNull();
   });
 });

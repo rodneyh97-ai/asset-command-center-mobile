@@ -93,5 +93,10 @@ export function sanitizeFeedback(raw: unknown): FeedbackEvent | null {
   if (VALID.setting.includes(raw.setting as Setting)) out.setting = raw.setting as Setting;
   if (VALID.mealTime.includes(raw.mealTime as MealTime)) out.mealTime = raw.mealTime as MealTime;
   if (VALID.feeling.includes(raw.feeling as Feeling)) out.feeling = raw.feeling as Feeling;
+  if (Array.isArray(raw.with)) {
+    const w = raw.with.filter((x): x is string => typeof x === 'string' && /^[a-z0-9-]{1,40}$/.test(x)).slice(0, 8);
+    if (w.length) out.with = w;
+  }
+  if (raw.source === 'logged') out.source = 'logged';
   return out;
 }

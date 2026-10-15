@@ -126,6 +126,10 @@ export interface FeedbackEvent {
   mealTime?: MealTime;
   /** How the user said they felt when choosing (for the weekly mood view). */
   feeling?: Feeling;
+  /** Household member ids who ate this too. */
+  with?: string[];
+  /** 'logged' = the user recorded something EatOS didn't suggest. */
+  source?: 'logged';
 }
 
 export interface ScoredReason {

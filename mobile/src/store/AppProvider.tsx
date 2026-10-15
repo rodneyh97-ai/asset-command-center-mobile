@@ -17,7 +17,7 @@ interface Store {
   ready: boolean;
   dispatch: (a: Action) => void;
   track: (name: AnalyticsName, props?: AnalyticsEvent['props']) => void;
-  feedback: (mealId: string, kind: FeedbackKind, where?: { setting: Setting; mealTime: MealTime; feeling?: Feeling }) => void;
+  feedback: (mealId: string, kind: FeedbackKind, where?: { setting: Setting; mealTime: MealTime; feeling?: Feeling; source?: 'logged' }) => void;
   deleteAllData: () => Promise<void>;
 }
 
@@ -29,6 +29,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Only write after a successful read; otherwise a transient read error would
   // overwrite the user's real data with an empty profile.
   const canPersist = useRef(false);
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,8 +82,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const feedback = useCallback(
-    (mealId: string, kind: FeedbackKind, where?: { setting: Setting; mealTime: MealTime; feeling?: Feeling }) => {
-      dispatch({ type: 'feedback', mealId, kind, at: clock.now().toISOString(), ...where });
+    (mealId: string, kind: FeedbackKind, where?: { setting: Setting; mealTime: MealTime; feeling?: Feeling; source?: 'logged' }) => {
+      // Every accepted meal records who else was eating, so couples share a history.
+      const withIds = kind === 'accepted' ? stateRef.current.eatingWith : [];
+      dispatch({ type: 'feedback', mealId, kind, at: clock.now().toISOString(), ...where, ...(withIds.length ? { with: withIds } : {}) });
     },
     [],
   );

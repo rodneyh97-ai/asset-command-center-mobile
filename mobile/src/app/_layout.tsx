@@ -61,6 +61,7 @@ function RootStack() {
       <Stack.Screen name="meal/[id]" />
       <Stack.Screen name="premium" options={{ presentation: 'modal' }} />
       <Stack.Screen name="knows" />
+      <Stack.Screen name="log" />
     </Stack>
   );
 }

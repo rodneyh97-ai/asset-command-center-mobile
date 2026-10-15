@@ -2,6 +2,8 @@ import type { FeedbackEvent, Profile } from '../../engine';
 import {
   checkinDue,
   initialState,
+  lastMeals,
+  whenLabel,
   nextMealSlot,
   parseStored,
   pendingRating,
@@ -167,3 +169,27 @@ describe('weekly check-in timing', () => {
     expect(checkinDue(base({ checkin: { lastAt: null, snoozeUntil: new Date(NOW.getTime() + 3600_000).toISOString() } }), NOW)).toBe(false));
 });
 
+
+describe('history for people', () => {
+  const at = (iso: string) => ({ mealId: 'burrito-bowl', kind: 'accepted' as const, at: new Date(iso).toISOString() });
+  const now = new Date('2026-10-15T20:00:00');
+  it.each([
+    [{ ...at('2026-10-15T19:00:00'), mealTime: 'dinner' as const }, 'Tonight'],
+    [{ ...at('2026-10-15T12:00:00'), mealTime: 'lunch' as const }, 'Today, lunch'],
+    [{ ...at('2026-10-14T19:00:00'), mealTime: 'dinner' as const }, 'Last night'],
+    [{ ...at('2026-10-14T08:00:00'), mealTime: 'breakfast' as const }, 'Yesterday, breakfast'],
+    [{ ...at('2026-10-12T12:00:00'), mealTime: 'lunch' as const }, 'Mon lunch'],
+  ])('%o → %s', (e, label) => expect(whenLabel(e, now)).toBe(label));
+
+  it('last meals: newest first, only things actually eaten', () => {
+    const h = [at('2026-10-10T12:00:00'), { ...at('2026-10-11T12:00:00'), kind: 'saved' as const }, at('2026-10-12T12:00:00'), at('2026-10-13T12:00:00'), at('2026-10-14T12:00:00'), at('2026-10-15T12:00:00')];
+    expect(lastMeals(h).map((e) => e.at.slice(8, 10))).toEqual(['15', '14', '13', '12']);
+  });
+
+  it('who-ate-with and logged markers survive save/load; junk is dropped', () => {
+    const raw = JSON.stringify({ ...initialState, history: [{ ...at('2026-10-15T12:00:00'), with: ['m-sam', '../x', 5], source: 'logged' }, { ...at('2026-10-15T13:00:00'), source: 'hacked' }] });
+    const h = parseStored(raw).history;
+    expect(h[0]).toMatchObject({ with: ['m-sam'], source: 'logged' });
+    expect(h[1].source).toBeUndefined();
+  });
+});

@@ -83,7 +83,8 @@ export type Action =
   | { type: 'completeOnboarding'; profile: Profile }
   | { type: 'updateProfile'; patch: Partial<Omit<Profile, 'createdAt'>> }
   | { type: 'setLastContext'; context: SavedContext }
-  | { type: 'feedback'; mealId: string; kind: FeedbackKind; at: string; setting?: Setting; mealTime?: MealTime; feeling?: Feeling }
+  | { type: 'feedback'; mealId: string; kind: FeedbackKind; at: string; setting?: Setting; mealTime?: MealTime; feeling?: Feeling; with?: string[]; source?: 'logged' }
+  | { type: 'removeEvent'; mealId: string; at: string }
   | { type: 'track'; event: AnalyticsEvent }
   | { type: 'deleteAll' }
   | { type: 'clearHidden' }
@@ -129,6 +130,8 @@ export function reducer(state: AppState, action: Action): AppState {
             ...(action.setting ? { setting: action.setting } : {}),
             ...(action.mealTime ? { mealTime: action.mealTime } : {}),
             ...(action.feeling ? { feeling: action.feeling } : {}),
+            ...(action.with?.length ? { with: action.with } : {}),
+            ...(action.source ? { source: action.source } : {}),
           },
         ].slice(-MAX_HISTORY),
       };
@@ -168,6 +171,8 @@ export function reducer(state: AppState, action: Action): AppState {
         memories: state.memories.filter((m) => m.subject !== action.id),
         eatingWith: state.eatingWith.filter((x) => x !== action.id),
       };
+    case 'removeEvent':
+      return { ...state, history: state.history.filter((e) => !(e.mealId === action.mealId && e.at === action.at)) };
     case 'remember':
       return { ...state, memories: upsertMemory(state.memories, action.memory) };
     case 'forget':
@@ -394,4 +399,24 @@ export function eatingWithNames(state: AppState): string[] {
 /** Memories that apply right now for me + whoever I'm eating with. */
 export function memoriesNow(state: AppState, now: Date): Memory[] {
   return activeMemories(state.memories, now, ['me', ...state.eatingWith]);
+}
+
+export const OTHER_MEAL = 'other';
+
+/** The last few things the user actually ate (EatOS picks and logged meals), newest first. */
+export function lastMeals(history: FeedbackEvent[], limit = 4): FeedbackEvent[] {
+  const out: FeedbackEvent[] = [];
+  for (let i = history.length - 1; i >= 0 && out.length < limit; i--) if (history[i].kind === 'accepted') out.push(history[i]);
+  return out;
+}
+
+/** "Tonight", "Last night", "Yesterday lunch", "Tue dinner" — friendly, no clock maths for the user. */
+export function whenLabel(e: FeedbackEvent, now: Date): string {
+  const d = new Date(e.at);
+  const days = Math.round((new Date(now.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86400000);
+  const meal = e.mealTime && e.mealTime !== 'snack' ? e.mealTime : e.mealTime === 'snack' ? 'snack' : '';
+  if (days === 0) return meal === 'dinner' ? 'Tonight' : meal ? `Today, ${meal}` : 'Today';
+  if (days === 1) return meal === 'dinner' ? 'Last night' : meal ? `Yesterday, ${meal}` : 'Yesterday';
+  const day = d.toLocaleDateString('en-US', { weekday: 'short' });
+  return days < 7 ? `${day}${meal ? ` ${meal}` : ''}` : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
