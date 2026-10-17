@@ -22,6 +22,16 @@ describe('anonymous usage ping', () => {
     expect(init.headers.apikey).toBe(key);
   });
 
+  it('sends JWT anon keys as Bearer too, but never a publishable key', async () => {
+    const seen: Record<string, string>[] = [];
+    const fetchImpl = async (_u: string, init: { headers: Record<string, string> }) => (seen.push(init.headers), { ok: true, status: 201 });
+    await sendPing(ping, { url, key: 'eyJ' + 'a'.repeat(40), fetchImpl });
+    await sendPing(ping, { url, key: 'sb_publishable_' + 'a'.repeat(30), fetchImpl });
+    expect(seen[0].Authorization).toMatch(/^Bearer eyJ/);
+    expect(seen[1].Authorization).toBeUndefined();
+    expect(seen[1].apikey).toMatch(/^sb_publishable_/);
+  });
+
   it('treats "already recorded" as sent, and offline/errors as not sent', async () => {
     expect(await sendPing(ping, { url, key, fetchImpl: async () => ({ ok: false, status: 409 }) })).toBe(true);
     expect(await sendPing(ping, { url, key, fetchImpl: async () => ({ ok: false, status: 500 }) })).toBe(false);

@@ -7,6 +7,8 @@ Branch: `claude/eatos-redesign-wip` (fast-forward into `claude/eatos-mvp` when v
 - Network allowlist (Custom): fdc.nal.usda.gov, api.nal.usda.gov, world.openfoodfacts.org, static.openfoodfacts.org, overpass-api.de, *.supabase.co, plus package managers. Founder is adding `api.supabase.com` and env vars `SUPABASE_ACCESS_TOKEN` (scoped token, EatOS project only, 7 days: Project Settings read, Advisors read, Database read-write, Migrations read-write; it can NOT read API keys) and `EXPO_PUBLIC_SUPABASE_ANON_KEY` (public anon key). Get the project URL via the API (`/v1/projects/{ref}` or the `get_project_url` capability). Never ask for tokens or passwords in chat.
 - Direct Postgres (port 5432/6543) probably can't pass the HTTPS proxy, so use the Management API: `POST https://api.supabase.com/v1/projects/{ref}/database/query` with `Authorization: Bearer $SUPABASE_ACCESS_TOKEN`, body `{"query": "..."}`.
 
+Project ref: `fkhtvstwcgpvvicgikoj` (region us-west-2), so the URL is `https://fkhtvstwcgpvvicgikoj.supabase.co`. The anon key may be a new `sb_publishable_…` key; `mobile/src/analytics/usage.ts` handles both.
+
 ## Steps
 1. `GET https://api.supabase.com/v1/projects` → find the EatOS project ref. Check which tables exist (`select table_name from information_schema.tables where table_schema='public'`).
 2. Run any of `supabase/migrations/0001_init.sql`, `0002_library.sql`, `0003_retention.sql` that aren't applied yet, in order. Then re-run the read/write checks that `supabase/tests/*.sql` cover, where they make sense on the real project (don't leave test users behind).

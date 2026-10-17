@@ -28,7 +28,14 @@ export function makePing(installId: string, day: number): Ping {
 
 type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<{ ok: boolean; status: number }>;
 
-const headers = (key: string) => ({ apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' });
+// Legacy anon keys are JWTs and also go in Authorization; new publishable keys (sb_publishable_…)
+// are not JWTs and must only be sent as `apikey`.
+const headers = (key: string): Record<string, string> => ({
+  apikey: key,
+  ...(key.startsWith('eyJ') ? { Authorization: `Bearer ${key}` } : {}),
+  'Content-Type': 'application/json',
+  Prefer: 'return=minimal',
+});
 
 /** True when the server has the ping (sent now, or already there). */
 export async function sendPing(ping: Ping, opts: { url?: string; key?: string; fetchImpl?: Fetch } = {}): Promise<boolean> {
