@@ -6,6 +6,8 @@ import { Linking, Pressable, TextInput, View } from 'react-native';
 
 import type { Allergen, Profile } from '../engine';
 import { allergyStatus } from '../library/allergy';
+import { rankFoods, rankPlaces, tasteFor } from '../library/personalize';
+import { clock } from '../clock';
 import { libraryConfigured, milesBetween, placesNear, searchFoods, type Food, type NutrientKey, type Place, type PlaceKind } from '../library/client';
 import { useStore } from '../store/AppProvider';
 import { Body, Button, Caution, ChipGroup, Icon, Row, Small } from './components';
@@ -43,7 +45,7 @@ function NotConnected({ what }: { what: string }) {
 // ---------- Foods ----------
 
 export function FoodsPanel({ profile }: { profile: Profile }) {
-  const { track } = useStore();
+  const { state, track } = useStore();
   const c = useColors();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Food[] | null>(null);
@@ -101,15 +103,31 @@ export function FoodsPanel({ profile }: { profile: Profile }) {
       {status === 'loading' ? <Small>Searching…</Small> : null}
       {status === 'error' ? <Body muted>Couldn’t reach the food library. Check your connection and try again.</Body> : null}
       {results && results.length === 0 && status === 'idle' ? <Body muted>No foods match “{query.trim()}”.</Body> : null}
-      {(results ?? []).map((f) => (
-        <FoodRow key={f.id} food={f} allergens={profile.allergens} gentle={gentle} open={open === f.id} onToggle={() => setOpen(open === f.id ? null : f.id)} />
+      {rankFoods(results ?? [], tasteFor(state, clock.now())).map(({ item: f, reason, disliked }) => (
+        <FoodRow key={f.id} food={f} reason={reason} disliked={disliked} allergens={profile.allergens} gentle={gentle} open={open === f.id} onToggle={() => setOpen(open === f.id ? null : f.id)} />
       ))}
       <Small>Food data: U.S. Department of Agriculture, FoodData Central (public domain) and Open Food Facts contributors (ODbL). Values are per 100 g.</Small>
     </View>
   );
 }
 
-function FoodRow({ food: f, allergens, gentle, open, onToggle }: { food: Food; allergens: Allergen[]; gentle: boolean; open: boolean; onToggle: () => void }) {
+function FoodRow({
+  food: f,
+  reason,
+  disliked,
+  allergens,
+  gentle,
+  open,
+  onToggle,
+}: {
+  food: Food;
+  reason: string | null;
+  disliked: boolean;
+  allergens: Allergen[];
+  gentle: boolean;
+  open: boolean;
+  onToggle: () => void;
+}) {
   const c = useColors();
   const s = allergyStatus(f, allergens);
   const n = f.nutrients;
@@ -131,6 +149,7 @@ function FoodRow({ food: f, allergens, gentle, open, onToggle }: { food: Food; a
           <Icon name={open ? 'chevron-up' : 'chevron-down'} size={18} color={c.inkMuted} />
         </Row>
       </Pressable>
+      {reason ? <Reason text={reason} negative={disliked} /> : null}
       {allergens.length > 0 ? <AllergyLine status={s} /> : null}
       {open ? (
         gentle ? (
@@ -152,6 +171,16 @@ function FoodRow({ food: f, allergens, gentle, open, onToggle }: { food: Food; a
         )
       ) : null}
     </View>
+  );
+}
+
+function Reason({ text, negative }: { text: string; negative: boolean }) {
+  const c = useColors();
+  return (
+    <Row gap={space.xs}>
+      <Icon name={negative ? 'thumbs-down-outline' : 'sparkles-outline'} size={14} color={negative ? c.inkMuted : c.primary} />
+      <Small muted={negative}>{text}</Small>
+    </Row>
   );
 }
 
@@ -243,7 +272,7 @@ export function NearbyPanel() {
       {status === 'error' ? <Body muted>Couldn’t load nearby places. Check your connection and try again.</Body> : null}
       {status === 'loading' ? <Small>Looking nearby…</Small> : null}
       {places && places.length === 0 && status === 'idle' ? <Body muted>Nothing listed within about 5 miles yet. Map data is volunteer-made and still growing.</Body> : null}
-      {here && (places ?? []).map((p) => {
+      {here && rankPlaces(places ?? [], (p) => milesBetween(here.lat, here.lon, p.lat, p.lon), tasteFor(state, clock.now()), state.groceryStore?.id ?? null).map(({ item: p, reason, disliked }) => {
         const mine = state.groceryStore?.id === p.id;
         const miles = milesBetween(here.lat, here.lon, p.lat, p.lon);
         return (
@@ -259,6 +288,7 @@ export function NearbyPanel() {
               </View>
               <Small>{miles < 0.1 ? '<0.1' : miles.toFixed(1)} mi</Small>
             </Row>
+            {reason && !mine ? <Reason text={reason} negative={disliked} /> : null}
             <Row>
               <View style={{ flex: 1 }}>
                 <Button label="Directions" variant="secondary" icon="navigate-outline" a11yLabel={`Directions to ${p.name}`} onPress={() => directions(p)} />
