@@ -4,6 +4,8 @@ import { Linking, View } from 'react-native';
 
 import type { MealIdea, Setting } from '../engine';
 import { Body, Button, Card, Cautions, CheckRow, Heading, Icon, MealArt, Row, Small, Tags, Title } from './components';
+import { costLabel, mealTags, timeLabel } from './mealTags';
+import { space, useColors } from './theme';
 
 /** Meals you'd actually cook (not just assemble or buy) get a link to cooking videos. */
 export const cooksAtHome = (meal: MealIdea, setting?: Setting) =>
@@ -11,8 +13,6 @@ export const cooksAtHome = (meal: MealIdea, setting?: Setting) =>
 /** A YouTube search, not one chosen video: EatOS can't vouch for what's in a particular video. */
 export const cookingVideosUrl = (meal: Pick<MealIdea, 'name'>) =>
   `https://www.youtube.com/results?search_query=${encodeURIComponent(`how to make ${meal.name.toLowerCase()} easy`)}`;
-import { costLabel, mealTags, timeLabel } from './mealTags';
-import { space, useColors } from './theme';
 
 export function MealFacts({ meal, setting }: { meal: MealIdea; setting?: Setting }) {
   const c = useColors();

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
-import { Alert, Share } from 'react-native';
+import { Alert, Linking, Share } from 'react-native';
 
 import * as reviewModule from '../analytics/review';
 import * as libraryClient from '../library/client';
@@ -8,6 +8,7 @@ import { ErrorBoundary } from '../app/_layout';
 import { clock } from '../clock';
 import { CATALOG } from '../engine';
 import { MEAL_INGREDIENTS } from '../engine/ingredients';
+import { distanceLabel, driveMinutes } from '../ui/NearbyForMeal';
 
 // Render the real app directory so tabs, stack screens and params all behave as in production.
 const routes = 'src/app';
@@ -921,7 +922,7 @@ describe('food & place library', () => {
     );
 
   it('home meals link to cooking videos (a search, never one chosen video); eating out does not', async () => {
-    const open = jest.spyOn(require('react-native').Linking, 'openURL').mockResolvedValue(true);
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
     await seedAt('home');
     renderRouter(routes, { initialUrl: '/meal/chicken-broccoli-pasta' });
     fireEvent.press(await screen.findByLabelText('Watch videos on how to make Chicken and broccoli pasta'));
@@ -933,7 +934,6 @@ describe('food & place library', () => {
   });
 
   it('drive estimates are rough and never below 2 minutes', () => {
-    const { driveMinutes, distanceLabel } = require('../ui/NearbyForMeal');
     expect(driveMinutes(0.5)).toBe(2);
     expect(driveMinutes(5)).toBe(16);
     expect(distanceLabel(0.2)).toMatch(/min walk/);
