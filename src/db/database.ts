@@ -16,6 +16,8 @@ import {
   ImprovementSnapshot,
   Tournament,
   TournamentMatch,
+  FilmClip,
+  FilmSession,
 } from '@/domain/types';
 
 interface VolleyballDB extends DBSchema {
@@ -71,6 +73,16 @@ interface VolleyballDB extends DBSchema {
     value: TournamentMatch;
     indexes: { 'by-tournament': string };
   };
+  filmClips: {
+    key: string;
+    value: FilmClip;
+    indexes: { 'by-match': string; 'by-player': string };
+  };
+  filmSessions: {
+    key: string;
+    value: FilmSession;
+    indexes: { 'by-team': string; 'by-match': string };
+  };
 }
 
 let dbInstance: IDBPDatabase<VolleyballDB> | null = null;
@@ -78,7 +90,7 @@ let dbInstance: IDBPDatabase<VolleyballDB> | null = null;
 export async function getDB(): Promise<IDBPDatabase<VolleyballDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<VolleyballDB>('volleyball-rotation-app', 3, {
+  dbInstance = await openDB<VolleyballDB>('volleyball-rotation-app', 4, {
     upgrade(db, oldVersion) {
       if (oldVersion < 1) {
         db.createObjectStore('clubs', { keyPath: 'id' });
@@ -135,6 +147,16 @@ export async function getDB(): Promise<IDBPDatabase<VolleyballDB>> {
 
         const tournamentMatchStore = db.createObjectStore('tournamentMatches', { keyPath: 'id' });
         tournamentMatchStore.createIndex('by-tournament', 'tournamentId');
+      }
+
+      if (oldVersion < 4) {
+        const filmClipStore = db.createObjectStore('filmClips', { keyPath: 'id' });
+        filmClipStore.createIndex('by-match', 'matchId');
+        filmClipStore.createIndex('by-player', 'playerId');
+
+        const filmSessionStore = db.createObjectStore('filmSessions', { keyPath: 'id' });
+        filmSessionStore.createIndex('by-team', 'teamId');
+        filmSessionStore.createIndex('by-match', 'matchId');
       }
     },
   });
@@ -440,5 +462,51 @@ export const tournamentMatchRepo = {
   async delete(id: string): Promise<void> {
     const db = await getDB();
     await db.delete('tournamentMatches', id);
+  },
+};
+
+export const filmClipRepo = {
+  async getByMatch(matchId: string): Promise<FilmClip[]> {
+    const db = await getDB();
+    return db.getAllFromIndex('filmClips', 'by-match', matchId);
+  },
+  async getByPlayer(playerId: string): Promise<FilmClip[]> {
+    const db = await getDB();
+    return db.getAllFromIndex('filmClips', 'by-player', playerId);
+  },
+  async get(id: string): Promise<FilmClip | undefined> {
+    const db = await getDB();
+    return db.get('filmClips', id);
+  },
+  async put(clip: FilmClip): Promise<void> {
+    const db = await getDB();
+    await db.put('filmClips', clip);
+  },
+  async delete(id: string): Promise<void> {
+    const db = await getDB();
+    await db.delete('filmClips', id);
+  },
+};
+
+export const filmSessionRepo = {
+  async getByTeam(teamId: string): Promise<FilmSession[]> {
+    const db = await getDB();
+    return db.getAllFromIndex('filmSessions', 'by-team', teamId);
+  },
+  async getByMatch(matchId: string): Promise<FilmSession[]> {
+    const db = await getDB();
+    return db.getAllFromIndex('filmSessions', 'by-match', matchId);
+  },
+  async get(id: string): Promise<FilmSession | undefined> {
+    const db = await getDB();
+    return db.get('filmSessions', id);
+  },
+  async put(session: FilmSession): Promise<void> {
+    const db = await getDB();
+    await db.put('filmSessions', session);
+  },
+  async delete(id: string): Promise<void> {
+    const db = await getDB();
+    await db.delete('filmSessions', id);
   },
 };

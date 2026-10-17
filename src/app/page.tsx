@@ -96,6 +96,14 @@ export default function Home() {
           <div className="text-sm text-slate-400">Plans & drills</div>
         </Link>
         <Link
+          href="/film"
+          className="bg-slate-800 hover:bg-slate-700 rounded-xl p-4 text-left transition-colors touch-manipulation"
+        >
+          <div className="text-2xl mb-2">🎬</div>
+          <div className="font-medium">Film Review</div>
+          <div className="text-sm text-slate-400">Bookmark key moments</div>
+        </Link>
+        <Link
           href="/settings"
           className="bg-slate-800 hover:bg-slate-700 rounded-xl p-4 text-left transition-colors touch-manipulation"
         >

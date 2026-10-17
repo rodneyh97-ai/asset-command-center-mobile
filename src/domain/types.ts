@@ -438,3 +438,34 @@ export interface CrossMatchStats {
   totalPointsOnCourt: number;
   totalPointsAgainstOnCourt: number;
 }
+
+// ── Video / Film Module ──
+
+export type ClipTag = 'highlight' | 'mistake' | 'tactical' | 'serve' | 'rally' | 'timeout' | 'custom';
+
+export interface FilmClip {
+  id: string;
+  matchId: string;
+  filmUrl: string;
+  startSeconds: number;
+  endSeconds?: number;
+  tag: ClipTag;
+  label: string;
+  playerId?: string;
+  setNumber: number;
+  score: string;
+  eventId?: string;
+  notes: string;
+  createdAt: string;
+}
+
+export interface FilmSession {
+  id: string;
+  teamId: string;
+  matchId: string;
+  filmUrl: string;
+  title: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
