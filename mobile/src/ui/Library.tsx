@@ -210,9 +210,12 @@ export function NearbyPanel() {
   const c = useColors();
   // Location is held only while this screen is open; it is never saved.
   const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
+  // A typed place ("64111", "Westport, Kansas City") instead of GPS. Also never saved.
+  const [where, setWhere] = useState('');
+  const [hereLabel, setHereLabel] = useState<string | null>(null);
   const [kind, setKind] = useState<PlaceKind | 'all'>('all');
   const [places, setPlaces] = useState<Place[] | null>(null);
-  const [status, setStatus] = useState<'idle' | 'locating' | 'loading' | 'denied' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'locating' | 'loading' | 'denied' | 'error' | 'not_found'>('idle');
 
   if (!libraryConfigured()) return <NotConnected what="places library" />;
 
@@ -238,9 +241,30 @@ export function NearbyPanel() {
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const at = { lat: pos.coords.latitude, lon: pos.coords.longitude };
       setHere(at);
+      setHereLabel(null);
       await load(at, kind);
     } catch {
       setStatus('error');
+    }
+  };
+  // Uses the phone's own address lookup (Apple / Google); no location permission needed.
+  const findTyped = async () => {
+    const q = where.trim();
+    if (q.length < 2 || status === 'locating') return;
+    setStatus('locating');
+    try {
+      const hits = await Location.geocodeAsync(q);
+      const hit = hits.find((h) => Number.isFinite(h.latitude) && Number.isFinite(h.longitude));
+      if (!hit) {
+        setStatus('not_found');
+        return;
+      }
+      const at = { lat: hit.latitude, lon: hit.longitude };
+      setHere(at);
+      setHereLabel(q);
+      await load(at, kind);
+    } catch {
+      setStatus('not_found'); // includes web, where address lookup isn't available
     }
   };
   const pickKind = (k: PlaceKind | 'all') => {
@@ -265,10 +289,35 @@ export function NearbyPanel() {
           <Body muted>Find restaurants, cafés and grocery stores around you. Your location is only used for this search and isn’t saved.</Body>
           <Button label={status === 'locating' ? 'Finding you…' : 'Find places near me'} icon="location-outline" disabled={status === 'locating'} onPress={() => void locate()} />
         </>
-      ) : (
-        <ChipGroup options={KIND_OPTIONS} value={kind} onChange={pickKind} />
-      )}
-      {status === 'denied' ? <Body muted>Location is off for EatOS. You can turn it on in your phone’s settings, or keep using meal ideas.</Body> : null}
+      ) : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, borderRadius: radius.md, paddingHorizontal: space.md, minHeight: 48 }}>
+        <Icon name="map-outline" size={18} color={c.inkMuted} />
+        <TextInput
+          value={where}
+          onChangeText={(t) => setWhere(t.slice(0, MAX_QUERY))}
+          onSubmitEditing={() => void findTyped()}
+          placeholder={here ? 'Search somewhere else' : 'Or type a ZIP code or neighborhood'}
+          placeholderTextColor={c.inkMuted}
+          accessibilityLabel="Type where you are"
+          maxLength={MAX_QUERY}
+          autoCorrect={false}
+          returnKeyType="search"
+          style={[type.body, { flex: 1, color: c.ink, paddingVertical: space.sm }]}
+        />
+        {where.trim().length >= 2 ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Search this place" onPress={() => void findTyped()} hitSlop={12}>
+            <Icon name="arrow-forward-circle" size={22} color={c.primary} />
+          </Pressable>
+        ) : null}
+      </View>
+      {here ? (
+        <>
+          <Small>Showing places near {hereLabel ? `“${hereLabel}”` : 'you'}</Small>
+          <ChipGroup options={KIND_OPTIONS} value={kind} onChange={pickKind} />
+        </>
+      ) : null}
+      {status === 'not_found' ? <Body muted>Couldn’t find that place. Try a ZIP code, or a neighborhood with the city, like “Westport, Kansas City”.</Body> : null}
+      {status === 'denied' ? <Body muted>Location is off for EatOS. You can turn it on in your phone’s settings, type where you are above, or keep using meal ideas.</Body> : null}
       {status === 'error' ? <Body muted>Couldn’t load nearby places. Check your connection and try again.</Body> : null}
       {status === 'loading' ? <Small>Looking nearby…</Small> : null}
       {places && places.length === 0 && status === 'idle' ? <Body muted>Nothing listed within about 5 miles yet. Map data is volunteer-made and still growing.</Body> : null}

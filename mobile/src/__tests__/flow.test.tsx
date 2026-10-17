@@ -850,6 +850,39 @@ describe('food & place library', () => {
     await screen.findByText(/Location is off for EatOS/);
   });
 
+  it('typed place: searches there without asking for location, and never saves it', async () => {
+    const Location = jest.requireMock('expo-location');
+    Location.requestForegroundPermissionsAsync.mockClear();
+    const near = jest.spyOn(libraryClient, 'placesNear').mockResolvedValue([
+      { id: 12, kind: 'restaurant', name: 'Westport Diner', cuisines: [], lat: 39.04, lon: -94.59, street: null },
+    ]);
+    await seed();
+    await openSection('Near me');
+    fireEvent.changeText(screen.getByLabelText('Type where you are'), 'Westport, Kansas City');
+    fireEvent.press(screen.getByLabelText('Search this place'));
+    await screen.findByText('Westport Diner');
+    expect(Location.geocodeAsync).toHaveBeenCalledWith('Westport, Kansas City');
+    expect(Location.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
+    expect(near).toHaveBeenCalledWith(39.0389, -94.5922, null);
+    expect(screen.getByText(/Showing places near “Westport, Kansas City”/)).toBeTruthy();
+    const stored = (await AsyncStorage.getItem(KEY)) ?? '';
+    expect(stored).not.toContain('Westport');
+    expect(stored).not.toContain('39.0389');
+  });
+
+  it('typed place not found (or web): explains, no crash', async () => {
+    const Location = jest.requireMock('expo-location');
+    Location.geocodeAsync.mockResolvedValueOnce([]);
+    await seed();
+    await openSection('Near me');
+    fireEvent.changeText(screen.getByLabelText('Type where you are'), 'zzzz');
+    fireEvent(screen.getByLabelText('Type where you are'), 'submitEditing');
+    await screen.findByText(/Couldn’t find that place/);
+    Location.geocodeAsync.mockRejectedValueOnce(new Error('unavailable on web'));
+    fireEvent(screen.getByLabelText('Type where you are'), 'submitEditing');
+    await screen.findByText(/Couldn’t find that place/);
+  });
+
   it('without a server, the library says it isn’t connected and meal ideas still work', async () => {
     configured.mockReturnValue(false);
     await seed();

@@ -42,4 +42,5 @@ jest.mock('expo-location', () => ({
   Accuracy: { Balanced: 3 },
   requestForegroundPermissionsAsync: jest.fn(async () => ({ granted: true })),
   getCurrentPositionAsync: jest.fn(async () => ({ coords: { latitude: 39.0997, longitude: -94.5786 } })),
+  geocodeAsync: jest.fn(async () => [{ latitude: 39.0389, longitude: -94.5922 }]),
 }));
