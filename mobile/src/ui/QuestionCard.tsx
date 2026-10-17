@@ -6,6 +6,7 @@ import { newMemory, type Question } from '../engine';
 import { useStore } from '../store/AppProvider';
 import { Body, Button, Card, ChipGroup, MultiChipGroup, Row, Small, TextAction } from './components';
 import { space, type, useColors } from './theme';
+import { TypedAnswer } from './TypedAnswer';
 
 /** One short, skippable question. Answers become memories the user can see and edit. */
 export function QuestionCard({ question }: { question: Question }) {
@@ -36,6 +37,11 @@ export function QuestionCard({ question }: { question: Question }) {
       ) : question.input === 'multi' ? (
         <>
           <MultiChipGroup options={question.options!} value={picked} onChange={setPicked} />
+          <Small>Something else? Type it:</Small>
+          <TypedAnswer
+            start={question.topic === 'dislike_food' ? 'dislike' : question.topic === 'like_food' ? 'like' : 'neutral'}
+            placeholder={question.topic === 'like_food' ? 'e.g. sushi, anything with cheese' : 'e.g. raw onion, anything too sweet'}
+          />
           <Button label={picked.length ? 'Save' : 'None — that’s fine'} variant="secondary" onPress={() => (picked.length ? save(picked) : done(true))} />
         </>
       ) : (

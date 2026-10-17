@@ -528,6 +528,22 @@ describe('memory & privacy dashboard', () => {
     await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!).memories).toEqual([]));
   });
 
+  it('typed in my own words: dislikes apply at once, an allergy only after I confirm, the rest is a note', async () => {
+    await seed();
+    renderRouter(routes, { initialUrl: '/knows' });
+    fireEvent.changeText(await screen.findByLabelText('Type it in your own words'), 'allergic to shrimp, hate olives, trying durian');
+    fireEvent.press(screen.getByText('Tell EatOS'));
+    await screen.findByText(/won’t suggest meals with olives/);
+    await screen.findByText(/Add a shellfish allergy\?/);
+    const read = async () => JSON.parse((await AsyncStorage.getItem('eatos.state.v1'))!);
+    await waitFor(async () => expect((await read()).memories.map((m: { topic: string; value: string }) => `${m.topic}:${m.value}`)).toContain('dislike_food:olives'));
+    expect((await read()).profile.allergens).not.toContain('shellfish'); // not until confirmed
+    expect((await read()).memories.some((m: { topic: string }) => m.topic === 'note')).toBe(true);
+    fireEvent.press(screen.getByLabelText('Yes, add shellfish allergy'));
+    await waitFor(async () => expect((await read()).profile.allergens).toContain('shellfish'));
+    expect(screen.getByText(/Your notes/)).toBeTruthy();
+  });
+
   it('a food marked "don’t like" never appears on the recommendation screen', async () => {
     await seed();
     renderRouter(routes, { initialUrl: '/knows' });

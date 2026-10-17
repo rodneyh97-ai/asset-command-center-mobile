@@ -43,7 +43,9 @@ export type AnalyticsName =
   | 'welcome_back_shown'
   | 'review_prompted'
   | 'library_search'
-  | 'grocery_store_set';
+  | 'grocery_store_set'
+  | 'typed_answer'
+  | 'mood_typed';
 
 export interface AnalyticsEvent {
   name: AnalyticsName;

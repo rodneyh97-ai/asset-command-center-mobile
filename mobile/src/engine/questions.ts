@@ -59,6 +59,16 @@ export const QUESTIONS: Question[] = [
     ],
   },
   { id: 'name', topic: 'preferred_name', prompt: 'What should EatOS call you?', input: 'text' },
+  {
+    id: 'likes',
+    topic: 'like_food',
+    prompt: 'Any foods you always enjoy?',
+    input: 'multi',
+    options: ['chicken', 'pasta', 'rice', 'eggs', 'cheese', 'avocado', 'salmon', 'beans', 'spicy', 'potato'].map((v) => ({
+      value: v,
+      label: v[0].toUpperCase() + v.slice(1),
+    })),
+  },
 ];
 
 const DAY = 86400000;

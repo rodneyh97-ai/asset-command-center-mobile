@@ -21,7 +21,8 @@ export type MemoryTopic =
   | 'cooking_skill' // 'beginner' | 'comfortable' | 'confident'
   | 'meals_per_day' // '2' | '3' | '4+'
   | 'not_true' // an inference the user rejected, e.g. 'cuisine:mexican'
-  | 'confirmed_trait'; // an inference the user confirmed
+  | 'confirmed_trait' // an inference the user confirmed
+  | 'note'; // the user's own words that EatOS couldn't match; shown, never used for picks
 
 export interface Memory {
   id: string;
@@ -47,7 +48,9 @@ const TOPICS: MemoryTopic[] = [
   'meals_per_day',
   'not_true',
   'confirmed_trait',
+  'note',
 ];
+const MAX_NOTE = 120;
 const KINDS: MemoryKind[] = ['stated', 'confirmed', 'temporary'];
 const SOURCES: MemorySource[] = ['onboarding', 'profile', 'question', 'inference', 'manual'];
 const ALLOWED_VALUES: Partial<Record<MemoryTopic, readonly string[]>> = {
@@ -78,7 +81,7 @@ export function dislikedFoodIn(meal: Pick<MealIdea, 'id'>, mems: Memory[]): Ingr
 
 /** Add or replace a memory. One value per (subject, topic) except list-like topics. */
 export function upsertMemory(all: Memory[], m: Memory): Memory[] {
-  const listTopics: MemoryTopic[] = ['dislike_food', 'like_food', 'not_true', 'confirmed_trait'];
+  const listTopics: MemoryTopic[] = ['dislike_food', 'like_food', 'not_true', 'confirmed_trait', 'note'];
   // Confirming and rejecting the same trait are mutually exclusive.
   if (m.topic === 'not_true' || m.topic === 'confirmed_trait') {
     const other = m.topic === 'not_true' ? 'confirmed_trait' : 'not_true';
@@ -105,7 +108,8 @@ export function sanitizeMemories(raw: unknown, memberIds: string[]): Memory[] {
     if (typeof o.id !== 'string' || o.id.length > 60) continue;
     if (typeof o.subject !== 'string' || !(o.subject === 'me' || memberIds.includes(o.subject))) continue;
     if (!TOPICS.includes(topic) || !KINDS.includes(o.kind as MemoryKind) || !SOURCES.includes(o.source as MemorySource)) continue;
-    if (typeof o.value !== 'string' || o.value.length > 60) continue;
+    if (typeof o.value !== 'string' || o.value.length > (topic === 'note' ? MAX_NOTE : 60)) continue;
+    if (topic === 'note' && !o.value.trim()) continue;
     const allowed = ALLOWED_VALUES[topic];
     if (allowed && !allowed.includes(o.value)) continue;
     if (topic === 'preferred_name' && !o.value.trim()) continue;

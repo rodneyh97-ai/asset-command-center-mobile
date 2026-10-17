@@ -29,6 +29,7 @@ import {
   toggleIn,
 } from '../ui/components';
 import { ALLERGENS, BUDGETS, CONSIDERATIONS, CUISINES, DIETS, GOALS, STRUGGLES, TIMES } from '../ui/labels';
+import { TypedAnswer } from '../ui/TypedAnswer';
 import { mealColors } from '../ui/mealArt';
 import { space, type, useColors } from '../ui/theme';
 
@@ -219,6 +220,8 @@ export default function Onboarding() {
               />
             ))}
           </View>
+          <Small>Anything else? Type it, e.g. “allergic to shrimp” or “I can’t stand mushrooms”.</Small>
+          <TypedAnswer start="dislike" placeholder="Other allergies or foods you avoid" onAllergens={(a) => setAllergens([...new Set([...allergens, ...a])])} />
           {allergens.length > 0 ? (
             <Caution>
               EatOS filters out meals that normally contain your allergens, but it can’t see restaurant kitchens or product labels. Always

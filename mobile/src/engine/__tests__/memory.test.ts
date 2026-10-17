@@ -88,7 +88,7 @@ describe('one question at a time', () => {
     expect(nextQuestion({ done: { tradeoff_week: NOW.toISOString() }, lastShownAt: NOW.toISOString() }, created, tomorrow)?.id).toBe('dislikes');
   });
   it('weekly questions come back after their answer expires', () => {
-    const all = { tradeoff_week: NOW.toISOString(), dislikes: NOW.toISOString(), weeknight_cook: NOW.toISOString(), cooking_skill: NOW.toISOString(), name: NOW.toISOString() };
+    const all = { tradeoff_week: NOW.toISOString(), dislikes: NOW.toISOString(), weeknight_cook: NOW.toISOString(), cooking_skill: NOW.toISOString(), name: NOW.toISOString(), likes: NOW.toISOString() };
     expect(nextQuestion({ done: all, lastShownAt: null }, created, new Date(NOW.getTime() + 2 * 86400000))).toBeNull();
     expect(nextQuestion({ done: all, lastShownAt: null }, created, new Date(NOW.getTime() + 8 * 86400000))?.id).toBe('tradeoff_week');
   });

@@ -1,5 +1,5 @@
 import { CATALOG } from './catalog';
-import { ingredientsOf } from './ingredients';
+import { ingredientsOf, type Ingredient } from './ingredients';
 import { habitBonus, learnTaste, tasteScore, type Taste } from './learn';
 import { dislikedFoodIn, valuesOf, type Memory } from './memory';
 import type {
@@ -301,6 +301,8 @@ export interface RecommendOptions {
   nudge?: { moreLike?: MealIdea['cuisine']; avoid?: MealIdea['cuisine'] };
   /** Active memories for everyone eating (caller filters out expired ones). */
   memories?: Memory[];
+  /** One-off steering from what the user typed ("want something cheesy, nothing spicy"). */
+  craving?: { foods: Ingredient[]; cuisines: MealIdea['cuisine'][]; avoid: Ingredient[] };
 }
 
 export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions = {}): RecommendationResult {
@@ -326,6 +328,8 @@ export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions
     if (!elig.ok) continue;
     eligibleCount++;
     if (exclude.has(meal.id)) continue;
+    const parts = ingredientsOf(meal.id);
+    if (opts.craving?.avoid.some((i) => parts.includes(i))) continue;
     const scored = scoreMeal(meal, profile, ctx, history, now, taste);
     let { score } = scored;
     const { reasons } = scored;
@@ -334,6 +338,12 @@ export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions
       reasons.push({ weight: 4, text: 'Similar to what you were looking at' });
     }
     if (opts.nudge?.avoid && meal.cuisine === opts.nudge.avoid) score -= 6;
+    const craved = parts.filter((i) => opts.craving?.foods.includes(i));
+    const cravedCuisine = opts.craving?.cuisines.includes(meal.cuisine);
+    if (craved.length || cravedCuisine) {
+      score += Math.min(6, craved.length * 3 + (cravedCuisine ? 4 : 0));
+      reasons.push({ weight: 5, text: craved.length ? `Has ${craved[0]}, like you said you wanted` : 'The kind of food you said you wanted' });
+    }
     // Personal memories.
     const likedHere = ingredientsOf(meal.id).filter((i) => liked.includes(i));
     if (likedHere.length) {

@@ -1,9 +1,9 @@
 import { Redirect, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 
 import { clock } from '../../clock';
-import { CATALOG, dislikedFoodIn, mealTimeFor, nextQuestion, safetyCheck, valuesOf, type MealIdea } from '../../engine';
+import { CATALOG, MAX_TYPED, dislikedFoodIn, mealTimeFor, nextQuestion, safetyCheck, understandMood, valuesOf, type MealIdea } from '../../engine';
 import { useActiveProfile } from '../../store/useActiveProfile';
 import { useStore } from '../../store/AppProvider';
 import {
@@ -48,7 +48,7 @@ import {
   Title,
 } from '../../ui/components';
 import { FEELINGS, HUNGER, SETTINGS, TIMES } from '../../ui/labels';
-import { space, useColors } from '../../ui/theme';
+import { radius, space, type, useColors } from '../../ui/theme';
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
 
@@ -58,6 +58,9 @@ export default function Home() {
   // 'auto' = show when due; 'thanks' = keep visible for its closing message; 'closed' = hidden this visit.
   const [checkinPhase, setCheckinPhase] = useState<'auto' | 'thanks' | 'closed'>('auto');
   const [confirmation, setConfirmation] = useState<{ text: string; mealId: string } | null>(null);
+  // "What are you in the mood for?" Used for this one decision only; never saved.
+  const [mood, setMood] = useState('');
+  const [moodRead, setMoodRead] = useState<string | null>(null);
   const now = clock.now();
 
   const profile = useActiveProfile(state);
@@ -116,10 +119,35 @@ export default function Home() {
   const question = free && !ask ? nextQuestion(state.questions, state.profile!.createdAt, now) : null;
   const preferredName = valuesOf(state.memories.filter((m) => m.subject === 'me'), 'preferred_name')[0];
 
+  // Flips the matching choices below so the user sees (and can fix) what EatOS understood.
+  const applyMood = () => {
+    const said = mood.trim();
+    if (said.length < 2) return ctx;
+    const m = understandMood(said);
+    const patch = { ...m.patch };
+    delete patch.budget; // budget is used on the next screen only, never saved
+    const next = { ...ctx, ...patch };
+    dispatch({ type: 'setLastContext', context: next });
+    const bits = [
+      ...(patch.feeling ? [FEELINGS.find((f) => f.value === patch.feeling)!.label] : []),
+      ...(patch.hunger ? [HUNGER.find((h) => h.value === patch.hunger)!.label] : []),
+      ...(patch.time ? [TIMES.find((t) => t.value === patch.time)!.label] : []),
+      ...(patch.setting ? [SETTINGS.find((s) => s.value === patch.setting)!.label] : []),
+      ...(m.patch.budget === 1 ? ['Budget-friendly'] : m.patch.budget === 3 ? ['A treat'] : []),
+      ...m.foods.map((f) => `wants ${f}`),
+      ...m.cuisines.map((x) => `wants ${x}`),
+      ...m.avoid.map((f) => `no ${f}`),
+    ];
+    setMoodRead(bits.length ? `Got it: ${bits.join(' · ')}` : 'EatOS will keep that in mind, but couldn’t match it to anything yet. Use the choices below.');
+    track('mood_typed', { understood: bits.length });
+    return next;
+  };
   const decide = () => {
-    dispatch({ type: 'setLastContext', context: ctx });
-    track('decide_started', { setting: ctx.setting });
-    router.push('/decide');
+    const next = applyMood();
+    dispatch({ type: 'setLastContext', context: next });
+    track('decide_started', { setting: next.setting });
+    const said = mood.trim();
+    router.push(said.length >= 2 ? { pathname: '/decide', params: { mood: said } } : '/decide');
   };
 
   const repeat = (m: MealIdea) => {
@@ -255,6 +283,29 @@ export default function Home() {
           />
         </Row>
       ) : null}
+
+      <View style={{ gap: space.sm }}>
+        <SectionLabel>What are you in the mood for?</SectionLabel>
+        <TextInput
+          value={mood}
+          onChangeText={(t) => {
+            setMood(t.slice(0, MAX_TYPED));
+            setMoodRead(null);
+          }}
+          onSubmitEditing={() => void applyMood()}
+          maxLength={MAX_TYPED}
+          placeholder="Optional, e.g. tired, want something cheesy and quick"
+          placeholderTextColor={c.inkMuted}
+          accessibilityLabel="What are you in the mood for?"
+          returnKeyType="done"
+          style={[type.body, { color: c.ink, borderWidth: 1, borderColor: c.border, borderRadius: radius.md, padding: space.md, backgroundColor: c.surface }]}
+        />
+        {moodRead ? (
+          <View accessibilityLiveRegion="polite">
+            <Small muted={false}>{moodRead}</Small>
+          </View>
+        ) : null}
+      </View>
 
       <View style={{ gap: space.sm }} accessibilityRole="radiogroup" accessibilityLabel="Where are you eating?">
         <SectionLabel>Where are you eating?</SectionLabel>

@@ -6,6 +6,7 @@ import { CATALOG, INGREDIENTS, activeMemories, inferredTaste, newMemory, valuesO
 import { useStore } from '../store/AppProvider';
 import { Body, Button, Card, CheckRow, Heading, MultiChipGroup, Row, Screen, Small, TextAction, Title, ToggleRow } from '../ui/components';
 import { ALLERGENS, CUISINES, DIETS, GOAL_LABEL, STRUGGLES } from '../ui/labels';
+import { TypedAnswer } from '../ui/TypedAnswer';
 
 const LABEL: Partial<Record<Memory['topic'], string>> = {
   preferred_name: 'Call me',
@@ -35,6 +36,7 @@ export default function Knows() {
     : [];
   const facts = mine.filter((m) => LABEL[m.topic] && m.kind !== 'temporary');
   const temporary = mine.filter((m) => m.kind === 'temporary');
+  const notes = mine.filter((m) => m.topic === 'note');
 
   const setDislikes = (next: string[]) => {
     for (const v of next.filter((x) => !dislikes.includes(x)))
@@ -90,6 +92,21 @@ export default function Knows() {
       <Heading>Foods you don’t like</Heading>
       <Small>EatOS won’t suggest meals that contain these.</Small>
       <MultiChipGroup options={INGREDIENTS.map((i) => ({ value: i, label: i[0].toUpperCase() + i.slice(1) }))} value={dislikes} onChange={setDislikes} />
+
+      <Heading>Tell EatOS in your own words</Heading>
+      <Small>Likes, dislikes, foods you love, allergies. EatOS reads it on this phone; nothing is sent anywhere.</Small>
+      <TypedAnswer />
+      {notes.length ? (
+        <>
+          <Small muted={false}>Your notes (EatOS can’t use these for picks yet)</Small>
+          {notes.map((m) => (
+            <Row key={m.id} style={{ justifyContent: 'space-between' }}>
+              <Body style={{ flex: 1 }}>“{m.value}”</Body>
+              <TextAction label="Delete" a11yLabel={`Delete note ${m.value}`} onPress={() => dispatch({ type: 'forget', id: m.id })} />
+            </Row>
+          ))}
+        </>
+      ) : null}
 
       {temporary.length ? (
         <>

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { clock } from '../clock';
-import { isSaved, mealTimeFor, recommend, swapsFor, type BudgetTier, type MealIdea, type Recommendation } from '../engine';
+import { isSaved, mealTimeFor, recommend, swapsFor, understandMood, type BudgetTier, type MealIdea, type Recommendation } from '../engine';
 import { useActiveProfile } from '../store/useActiveProfile';
 import { useStore } from '../store/AppProvider';
 import { askForReview } from '../analytics/review';
@@ -33,7 +33,10 @@ type Nudge = { moreLike?: MealIdea['cuisine']; avoid?: MealIdea['cuisine'] };
 export default function Decide() {
   const { state, ready, dispatch, track, feedback } = useStore();
   const c = useColors();
-  const planning = useLocalSearchParams<{ plan?: string }>().plan === '1';
+  const params = useLocalSearchParams<{ plan?: string; mood?: string }>();
+  const planning = params.plan === '1';
+  // What the user typed on Home, for this decision only (re-read here, never stored).
+  const [mood] = useState(() => (typeof params.mood === 'string' && params.mood.trim() ? understandMood(params.mood) : null));
   const [slot] = useState(() => nextMealSlot(clock.now()));
   const [startedAt] = useState(now);
   const [exclude, setExclude] = useState<string[]>([]);
@@ -56,11 +59,11 @@ export default function Decide() {
       profile
         ? {
             ...(state.lastContext ?? defaultContext(profile)),
-            budget: budgetOverride ?? profile.budget,
+            budget: budgetOverride ?? mood?.patch.budget ?? profile.budget,
             mealTime: planning ? slot.mealTime : mealTimeFor(clock.now()),
           }
         : null,
-    [profile, state.lastContext, planning, slot, budgetOverride],
+    [profile, state.lastContext, planning, slot, budgetOverride, mood],
   );
   const result = useMemo(() => {
     if (!profile || !ctx) return null;
@@ -70,6 +73,7 @@ export default function Decide() {
       nudge,
       memories: memoriesNow(state, clock.now()),
       learn: state.personalization.learnFromBehavior,
+      craving: mood ? { foods: mood.foods, cuisines: mood.cuisines, avoid: mood.avoid } : undefined,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- memories/eaters/settings are the inputs that matter
   }, [profile, ctx, exclude, historyAtOpen, nudge, state.memories, state.eatingWith, state.personalization.learnFromBehavior]);
