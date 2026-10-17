@@ -22,7 +22,13 @@ export function toRow(line, kind) {
 
 export const isUseful = (o) => o.allergens_known || o.may_contain.length > 0 || Object.keys(o.nutrients).length > 0;
 
+/** The same source id twice in one statement is an error; keep the last copy (sources repeat some barcodes). */
+export function dedupe(rows) {
+  return [...new Map(rows.map((r) => [`${r.source}\u0000${r.source_id}`, r])).values()];
+}
+
 function sql(kind, rows) {
+  rows = dedupe(rows);
   const cols = kind === 'foods' ? FOOD_COLUMNS : PLACE_COLUMNS;
   const json = JSON.stringify(rows);
   let tag = 'j';

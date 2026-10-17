@@ -126,6 +126,8 @@ test('API loader: COPY rows round-trip to JSON rows; "useful" filter keeps only 
   assert.ok(odd.name.includes('\\'));
   assert.equal(isUseful(odd), false, 'no nutrition, no mapped allergens, no traces');
   assert.equal(isUseful(bar), true);
+  const { dedupe } = await import('./load-api.mjs');
+  assert.deepEqual(dedupe([{ source: 'a', source_id: '1', name: 'old' }, { source: 'a', source_id: '1', name: 'new' }, { source: 'b', source_id: '1', name: 'x' }]).map((r) => r.name), ['new', 'x']);
   const places = path.join(tmp, 'osm2.tsv');
   await importOsm(fx('overpass.json'), places);
   const joe = toRow(fs.readFileSync(places, 'utf8').split('\n')[0], 'places');
