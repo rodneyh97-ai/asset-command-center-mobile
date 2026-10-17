@@ -18,6 +18,9 @@ import {
   TournamentMatch,
   FilmClip,
   FilmSession,
+  HighlightReel,
+  ScoutingReport,
+  RecruitingProfile,
 } from '@/domain/types';
 
 interface VolleyballDB extends DBSchema {
@@ -83,6 +86,21 @@ interface VolleyballDB extends DBSchema {
     value: FilmSession;
     indexes: { 'by-team': string; 'by-match': string };
   };
+  highlightReels: {
+    key: string;
+    value: HighlightReel;
+    indexes: { 'by-team': string; 'by-player': string };
+  };
+  scoutingReports: {
+    key: string;
+    value: ScoutingReport;
+    indexes: { 'by-team': string };
+  };
+  recruitingProfiles: {
+    key: string;
+    value: RecruitingProfile;
+    indexes: { 'by-team': string; 'by-player': string };
+  };
 }
 
 let dbInstance: IDBPDatabase<VolleyballDB> | null = null;
@@ -90,7 +108,7 @@ let dbInstance: IDBPDatabase<VolleyballDB> | null = null;
 export async function getDB(): Promise<IDBPDatabase<VolleyballDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<VolleyballDB>('volleyball-rotation-app', 4, {
+  dbInstance = await openDB<VolleyballDB>('volleyball-rotation-app', 7, {
     upgrade(db, oldVersion) {
       if (oldVersion < 1) {
         db.createObjectStore('clubs', { keyPath: 'id' });
@@ -157,6 +175,23 @@ export async function getDB(): Promise<IDBPDatabase<VolleyballDB>> {
         const filmSessionStore = db.createObjectStore('filmSessions', { keyPath: 'id' });
         filmSessionStore.createIndex('by-team', 'teamId');
         filmSessionStore.createIndex('by-match', 'matchId');
+      }
+
+      if (oldVersion < 5) {
+        const highlightReelStore = db.createObjectStore('highlightReels', { keyPath: 'id' });
+        highlightReelStore.createIndex('by-team', 'teamId');
+        highlightReelStore.createIndex('by-player', 'playerId');
+      }
+
+      if (oldVersion < 6) {
+        const scoutingStore = db.createObjectStore('scoutingReports', { keyPath: 'id' });
+        scoutingStore.createIndex('by-team', 'teamId');
+      }
+
+      if (oldVersion < 7) {
+        const recruitingStore = db.createObjectStore('recruitingProfiles', { keyPath: 'id' });
+        recruitingStore.createIndex('by-team', 'teamId');
+        recruitingStore.createIndex('by-player', 'playerId');
       }
     },
   });
@@ -508,5 +543,70 @@ export const filmSessionRepo = {
   async delete(id: string): Promise<void> {
     const db = await getDB();
     await db.delete('filmSessions', id);
+  },
+};
+
+export const highlightReelRepo = {
+  async getByTeam(teamId: string): Promise<HighlightReel[]> {
+    const db = await getDB();
+    return db.getAllFromIndex('highlightReels', 'by-team', teamId);
+  },
+  async getByPlayer(playerId: string): Promise<HighlightReel[]> {
+    const db = await getDB();
+    return db.getAllFromIndex('highlightReels', 'by-player', playerId);
+  },
+  async get(id: string): Promise<HighlightReel | undefined> {
+    const db = await getDB();
+    return db.get('highlightReels', id);
+  },
+  async put(reel: HighlightReel): Promise<void> {
+    const db = await getDB();
+    await db.put('highlightReels', reel);
+  },
+  async delete(id: string): Promise<void> {
+    const db = await getDB();
+    await db.delete('highlightReels', id);
+  },
+};
+
+export const recruitingProfileRepo = {
+  async getByTeam(teamId: string): Promise<RecruitingProfile[]> {
+    const db = await getDB();
+    return db.getAllFromIndex('recruitingProfiles', 'by-team', teamId);
+  },
+  async getByPlayer(playerId: string): Promise<RecruitingProfile[]> {
+    const db = await getDB();
+    return db.getAllFromIndex('recruitingProfiles', 'by-player', playerId);
+  },
+  async get(id: string): Promise<RecruitingProfile | undefined> {
+    const db = await getDB();
+    return db.get('recruitingProfiles', id);
+  },
+  async put(profile: RecruitingProfile): Promise<void> {
+    const db = await getDB();
+    await db.put('recruitingProfiles', profile);
+  },
+  async delete(id: string): Promise<void> {
+    const db = await getDB();
+    await db.delete('recruitingProfiles', id);
+  },
+};
+
+export const scoutingReportRepo = {
+  async getByTeam(teamId: string): Promise<ScoutingReport[]> {
+    const db = await getDB();
+    return db.getAllFromIndex('scoutingReports', 'by-team', teamId);
+  },
+  async get(id: string): Promise<ScoutingReport | undefined> {
+    const db = await getDB();
+    return db.get('scoutingReports', id);
+  },
+  async put(report: ScoutingReport): Promise<void> {
+    const db = await getDB();
+    await db.put('scoutingReports', report);
+  },
+  async delete(id: string): Promise<void> {
+    const db = await getDB();
+    await db.delete('scoutingReports', id);
   },
 };

@@ -104,6 +104,30 @@ export default function Home() {
           <div className="text-sm text-slate-400">Bookmark key moments</div>
         </Link>
         <Link
+          href="/highlights"
+          className="bg-slate-800 hover:bg-slate-700 rounded-xl p-4 text-left transition-colors touch-manipulation"
+        >
+          <div className="text-2xl mb-2">🎞️</div>
+          <div className="font-medium">Highlights</div>
+          <div className="text-sm text-slate-400">Build & share reels</div>
+        </Link>
+        <Link
+          href="/scouting"
+          className="bg-slate-800 hover:bg-slate-700 rounded-xl p-4 text-left transition-colors touch-manipulation"
+        >
+          <div className="text-2xl mb-2">🔍</div>
+          <div className="font-medium">Scouting</div>
+          <div className="text-sm text-slate-400">Opponent reports</div>
+        </Link>
+        <Link
+          href="/recruiting"
+          className="bg-slate-800 hover:bg-slate-700 rounded-xl p-4 text-left transition-colors touch-manipulation"
+        >
+          <div className="text-2xl mb-2">🎓</div>
+          <div className="font-medium">Recruiting</div>
+          <div className="text-sm text-slate-400">College profiles</div>
+        </Link>
+        <Link
           href="/settings"
           className="bg-slate-800 hover:bg-slate-700 rounded-xl p-4 text-left transition-colors touch-manipulation"
         >

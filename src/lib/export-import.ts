@@ -14,10 +14,17 @@ import {
   CoachObservation,
   Drill,
   ImprovementSnapshot,
+  Tournament,
+  TournamentMatch,
+  FilmClip,
+  FilmSession,
+  HighlightReel,
+  ScoutingReport,
+  RecruitingProfile,
 } from '@/domain/types';
 
 export interface BackupData {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   exportedAt: string;
   clubs: Club[];
   seasons: Season[];
@@ -33,12 +40,20 @@ export interface BackupData {
   coachObservations?: CoachObservation[];
   customDrills?: Drill[];
   improvementSnapshots?: (ImprovementSnapshot & { id: string; teamId: string })[];
+  tournaments?: Tournament[];
+  tournamentMatches?: TournamentMatch[];
+  filmClips?: FilmClip[];
+  filmSessions?: FilmSession[];
+  highlightReels?: HighlightReel[];
+  scoutingReports?: ScoutingReport[];
+  recruitingProfiles?: RecruitingProfile[];
 }
 
 export async function exportBackup(): Promise<BackupData> {
   const db = await getDB();
   const [clubs, seasons, teams, players, rulesets, lineups, matches, matchEvents,
-    devPlans, practicePlans, practiceResults, coachObservations, customDrills, improvementSnapshots] =
+    devPlans, practicePlans, practiceResults, coachObservations, customDrills, improvementSnapshots,
+    tournaments, tournamentMatches, filmClips, filmSessions, highlightReels, scoutingReports, recruitingProfiles] =
     await Promise.all([
       db.getAll('clubs'),
       db.getAll('seasons'),
@@ -54,10 +69,17 @@ export async function exportBackup(): Promise<BackupData> {
       db.getAll('coachObservations'),
       db.getAll('customDrills'),
       db.getAll('improvementSnapshots'),
+      db.getAll('tournaments'),
+      db.getAll('tournamentMatches'),
+      db.getAll('filmClips'),
+      db.getAll('filmSessions'),
+      db.getAll('highlightReels'),
+      db.getAll('scoutingReports'),
+      db.getAll('recruitingProfiles'),
     ]);
 
   return {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     clubs,
     seasons,
@@ -73,6 +95,13 @@ export async function exportBackup(): Promise<BackupData> {
     coachObservations,
     customDrills,
     improvementSnapshots,
+    tournaments,
+    tournamentMatches,
+    filmClips,
+    filmSessions,
+    highlightReels,
+    scoutingReports,
+    recruitingProfiles,
   };
 }
 
@@ -94,7 +123,7 @@ function truncateStrings(obj: Record<string, unknown>, maxLen = 1000): Record<st
 }
 
 export async function importBackup(data: BackupData): Promise<{ imported: number }> {
-  if (data.version !== 1 && data.version !== 2) throw new Error('Unsupported backup version');
+  if (data.version !== 1 && data.version !== 2 && data.version !== 3) throw new Error('Unsupported backup version');
 
   const db = await getDB();
   let count = 0;
@@ -114,6 +143,13 @@ export async function importBackup(data: BackupData): Promise<{ imported: number
     { name: 'coachObservations' as const, items: data.coachObservations || [] },
     { name: 'customDrills' as const, items: data.customDrills || [] },
     { name: 'improvementSnapshots' as const, items: data.improvementSnapshots || [] },
+    { name: 'tournaments' as const, items: data.tournaments || [] },
+    { name: 'tournamentMatches' as const, items: data.tournamentMatches || [] },
+    { name: 'filmClips' as const, items: data.filmClips || [] },
+    { name: 'filmSessions' as const, items: data.filmSessions || [] },
+    { name: 'highlightReels' as const, items: data.highlightReels || [] },
+    { name: 'scoutingReports' as const, items: data.scoutingReports || [] },
+    { name: 'recruitingProfiles' as const, items: data.recruitingProfiles || [] },
   ] as const;
 
   for (const { name, items } of stores) {
@@ -165,10 +201,10 @@ function sanitizeArray(arr: unknown): unknown[] {
 
 function validateBackupStructure(data: unknown): BackupData {
   if (!isPlainObject(data)) throw new Error('Invalid backup: not an object');
-  if (data.version !== 1 && data.version !== 2) throw new Error('Unsupported backup version');
+  if (data.version !== 1 && data.version !== 2 && data.version !== 3) throw new Error('Unsupported backup version');
   if ('__proto__' in data) throw new Error('Invalid backup: forbidden key');
 
-  const version = data.version as 1 | 2;
+  const version = data.version as 1 | 2 | 3;
 
   return {
     version,
@@ -187,6 +223,13 @@ function validateBackupStructure(data: unknown): BackupData {
     coachObservations: sanitizeArray(data.coachObservations) as CoachObservation[],
     customDrills: sanitizeArray(data.customDrills) as Drill[],
     improvementSnapshots: sanitizeArray(data.improvementSnapshots) as (ImprovementSnapshot & { id: string; teamId: string })[],
+    tournaments: sanitizeArray(data.tournaments) as Tournament[],
+    tournamentMatches: sanitizeArray(data.tournamentMatches) as TournamentMatch[],
+    filmClips: sanitizeArray(data.filmClips) as FilmClip[],
+    filmSessions: sanitizeArray(data.filmSessions) as FilmSession[],
+    highlightReels: sanitizeArray(data.highlightReels) as HighlightReel[],
+    scoutingReports: sanitizeArray(data.scoutingReports) as ScoutingReport[],
+    recruitingProfiles: sanitizeArray(data.recruitingProfiles) as RecruitingProfile[],
   };
 }
 
