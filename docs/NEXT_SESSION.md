@@ -14,6 +14,20 @@
   longer in OSM (kept, nothing deleted). DB 230 MB / 500 MB. `places_near` returns rows for Lee's Summit and Olathe.
 - Remaining: founder device test.
 
+## Place links + "new or updated on the map" (2026-10-17, cloud session)
+- Code done and pushed: importer keeps OSM `website` / `contact:website` and `menu` / `website:menu` (http/https only,
+  ≤300 chars) and the element's last-edit time (`out center meta;` in `overpass.ql`) as `osm_updated_at`.
+  `supabase/migrations/0007_place_links.sql` adds the three nullable columns (scheme check) and restates `places_near`.
+  App: "See their menu" opens the place's own menu link, else its website (button says "Their website"), else the old
+  web search. Cards show "New or updated on the map" when the OSM entry changed in the last 90 days. That is an edit
+  date, never an opening date: don't word it as "new restaurant".
+- LIVE DB: 0007 is **not applied yet**; waiting on the founder's yes ("Ask me before changing the live database").
+  When approved: apply 0007 via `POST /v1/projects/fkhtvstwcgpvvicgikoj/database/migrations` (body `{name, query}`),
+  re-download the 4 quadrants (bbox split at 39.07 / -94.565) from `overpass.kumi.systems` (retry on 500),
+  `node tools/library/osm.mjs` each, then `node tools/library/load-api.mjs fkhtvstwcgpvvicgikoj places <tsv>` (upsert).
+  Verify `count(website)`, `count(menu_url)`, and DB size (was 230 MB / 500 MB).
+  Until then the app works as before: the columns are just missing, so links fall back to the web search.
+
 ---
 
 Branch: `claude/eatos-redesign-wip` (fast-forward into `claude/eatos-mvp` when verified).
