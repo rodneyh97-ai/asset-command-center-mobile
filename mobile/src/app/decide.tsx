@@ -25,6 +25,7 @@ import {
   Title,
 } from '../ui/components';
 import { MealDetail, MealFacts } from '../ui/MealDetail';
+import { NearbyForMeal } from '../ui/NearbyForMeal';
 import { mealTags } from '../ui/mealTags';
 import { space, useColors } from '../ui/theme';
 
@@ -81,6 +82,9 @@ export default function Decide() {
   const shown = result ? [result.primary, ...result.alternatives].filter((r): r is Recommendation => !!r) : [];
   const primary = shown.find((r) => r.meal.id === focusId) ?? shown[0];
   const others = shown.filter((r) => r !== primary);
+  // Everything else that fits, for scrolling: the alternatives first, then the rest, 10 at a time.
+  const [moreCount, setMoreCount] = useState(MORE_PAGE);
+  const list = [...others, ...(result?.more ?? [])];
 
   const primaryId = primary?.meal.id;
   useEffect(() => {
@@ -427,11 +431,36 @@ export default function Decide() {
       {primary.isNew ? <Small>Something new you might like</Small> : null}
 
       <MealDetail meal={primary.meal} reasons={primary.reasons} cautions={primary.cautions} swaps={swaps} setting={ctx.setting} />
+
+      {ctx.setting !== 'home' && !planning ? <NearbyForMeal key={primary.meal.id} meal={primary.meal} setting={ctx.setting} ideas={[primary, ...list]} onChoose={accept} /> : null}
+
+      {list.length ? (
+        <View style={{ gap: space.sm }}>
+          <Heading>More options</Heading>
+          <Small>All of these fit your allergies and diet. Keep scrolling, or tap one to choose it.</Small>
+          {list.slice(0, moreCount).map((r) => (
+            <Card key={r.meal.id} style={{ flexDirection: 'row', gap: space.md, padding: space.md, alignItems: 'center' }}>
+              <MealArt meal={r.meal} variant="thumb" />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Body style={{ fontWeight: '600' }}>{r.meal.name}</Body>
+                <Small>{r.meal.summary}</Small>
+                <Tags labels={mealTags(r.meal, 2)} />
+                {r.cautions.length > 0 ? <Small style={{ color: c.cautionText }}>⚠︎ {r.cautions[0]}</Small> : null}
+              </View>
+              <Button label="Choose" variant="secondary" a11yLabel={`Choose ${r.meal.name}`} onPress={() => accept(r)} />
+            </Card>
+          ))}
+          {list.length > moreCount ? (
+            <Button label={`Show more (${list.length - moreCount} left)`} variant="ghost" icon="chevron-down" onPress={() => setMoreCount(moreCount + MORE_PAGE)} />
+          ) : null}
+        </View>
+      ) : null}
     </Screen>
   );
 }
 
 const DOUBLE_TAP_MS = 700;
+const MORE_PAGE = 10;
 
 function cap(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);

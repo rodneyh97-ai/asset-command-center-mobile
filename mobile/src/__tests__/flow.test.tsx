@@ -907,4 +907,59 @@ describe('food & place library', () => {
     fireEvent.press(screen.getByLabelText('Meal ideas'));
     await screen.findByLabelText('Search meal ideas');
   });
+
+  const seedAt = (setting: string, allergens: string[] = []) =>
+    AsyncStorage.setItem(
+      'eatos.state.v1',
+      JSON.stringify({
+        version: 1,
+        profile: { goal: 'eat_better', struggles: [], cuisines: [], allergens, diets: [], budget: 2, considerations: [], createdAt: new Date().toISOString() },
+        history: [],
+        lastContext: { setting, hunger: 'normal', time: 20, budget: 2, feeling: 'fine' },
+        analytics: [],
+      }),
+    );
+
+  it('recommendation: a long list of safe options to scroll, 10 more at a time', async () => {
+    await seedAt('takeout', ['dairy']);
+    renderRouter(routes, { initialUrl: '/decide' });
+    await screen.findByText('More options');
+    const chooseButtons = () => screen.getAllByLabelText(/^Choose /);
+    expect(chooseButtons().length).toBe(10);
+    fireEvent.press(screen.getByText(/Show more/));
+    await waitFor(() => expect(chooseButtons().length).toBeGreaterThan(10));
+    for (const b of chooseButtons()) {
+      const name = String(b.props.accessibilityLabel).replace(/^Choose /, '');
+      const meal = CATALOG.find((m) => m.name === name)!;
+      expect(meal.contains).not.toContain('dairy');
+      expect(meal.mayContain).not.toContain('dairy'); // eating out: may-contain is never shown
+      expect(meal.settings).toContain('takeout');
+    }
+  });
+
+  it('recommendation: places near me, matching food first, on a map, only when eating out', async () => {
+    const near = jest.spyOn(libraryClient, 'placesNear').mockResolvedValue([
+      { id: 20, kind: 'grocery', name: 'Corner Grocery', cuisines: [], lat: 39.1, lon: -94.58, street: null },
+      { id: 21, kind: 'restaurant', name: 'Near Diner', cuisines: ['american'], lat: 39.0998, lon: -94.5787, street: null },
+      { id: 22, kind: 'restaurant', name: 'Far Taqueria', cuisines: ['mexican'], lat: 39.13, lon: -94.6, street: null },
+    ]);
+    await seedAt('takeout');
+    renderRouter(routes, { initialUrl: '/decide' });
+    fireEvent.press(await screen.findByText('Show places near me'));
+    await screen.findByLabelText('Directions to Near Diner');
+    expect(near).toHaveBeenCalled();
+    expect(screen.queryByText('Corner Grocery')).toBeNull(); // takeout: no grocery stores
+    expect(screen.getByLabelText('Pin: Near Diner')).toBeTruthy();
+    // Each place suggests the user's own safe ideas that match its food (never claims a menu).
+    const taco = screen.getAllByLabelText(/ at Far Taqueria$/);
+    expect(taco.length).toBeGreaterThan(0);
+    for (const t of taco) expect(CATALOG.find((m) => `Choose ${m.name} at Far Taqueria` === t.props.accessibilityLabel)?.cuisine).toBe('mexican');
+    expect(screen.getAllByText(/dishes most Mexican spots have/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/OpenStreetMap contributors/)).toBeTruthy();
+    screen.unmount();
+    await seedAt('home');
+    renderRouter(routes, { initialUrl: '/decide' });
+    await screen.findByText('More options');
+    expect(screen.queryByText('Places near you')).toBeNull();
+  });
 });

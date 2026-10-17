@@ -123,6 +123,16 @@ export const MEAL_INGREDIENTS: Record<string, Ingredient[]> = {
   'chicken-souvlaki-salad': ['chicken', 'greens', 'tomato', 'cucumber', 'olives'],
   'pork-tacos': ['pork', 'tortilla', 'corn', 'onion', 'cilantro'],
   'veggie-sub': ['bread', 'greens', 'tomato', 'cucumber', 'peppers', 'onion'],
+  'beef-and-broccoli': ['beef', 'broccoli', 'rice', 'soy sauce'],
+  'veggie-lo-mein': ['noodles', 'greens', 'mushrooms', 'soy sauce'],
+  'chicken-veggie-stir-fry-takeout': ['chicken', 'broccoli', 'peppers', 'rice'],
+  'thai-basil-chicken': ['chicken', 'rice', 'spicy', 'eggs'],
+  'tom-kha-soup': ['chicken', 'coconut', 'mushrooms'],
+  'korean-bbq-bowl': ['beef', 'rice', 'spicy', 'soy sauce'],
+  'korean-tofu-stew': ['tofu', 'eggs', 'spicy', 'rice', 'shrimp', 'pork'],
+  'banh-mi': ['bread', 'chicken', 'pork', 'cilantro', 'spicy', 'mayo', 'cucumber'],
+  'vermicelli-bowl': ['noodles', 'chicken', 'greens', 'cucumber', 'nuts'],
+  'pho-chicken': ['noodles', 'chicken', 'cilantro'],
 };
 
 export function ingredientsOf(mealId: string): Ingredient[] {

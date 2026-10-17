@@ -15,6 +15,7 @@ import type {
   Setting,
 } from './types';
 
+const MORE_OPTIONS = 60;
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
@@ -406,5 +407,10 @@ export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions
       alternatives[1] = { ...fresh, isNew: true, reasons: ['Something new you might like', ...fresh.reasons].slice(0, 3) };
     }
   }
-  return { primary, alternatives };
+  // A longer list for someone who just wants to scan and pick: same safety checks, best first,
+  // meals that suit this time of day before the rest.
+  const shownIds = new Set([primary, ...alternatives].map((r) => r.meal.id));
+  const others = rest.filter((r) => !shownIds.has(r.meal.id));
+  const more = [...others.filter((r) => r.meal.mealTimes.includes(ctx.mealTime)), ...others.filter((r) => !r.meal.mealTimes.includes(ctx.mealTime))].slice(0, MORE_OPTIONS);
+  return { primary, alternatives, more };
 }

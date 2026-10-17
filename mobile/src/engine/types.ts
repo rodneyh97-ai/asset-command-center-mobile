@@ -158,4 +158,6 @@ export interface RecommendationResult {
   alternatives: Recommendation[];
   /** Populated when nothing could be recommended, explaining why. */
   emptyReason?: string;
+  /** More safe options, best first, for scrolling a list (shown 10 at a time). */
+  more?: Recommendation[];
 }

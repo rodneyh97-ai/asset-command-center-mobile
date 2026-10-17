@@ -1,6 +1,5 @@
 // The public food & place library: search foods (USDA + Open Food Facts) and find
 // restaurants and grocery stores nearby (OpenStreetMap). Read-only, no account needed.
-import * as Location from 'expo-location';
 import { useRef, useState } from 'react';
 import { Linking, Pressable, TextInput, View } from 'react-native';
 
@@ -8,11 +7,13 @@ import type { Allergen, Profile } from '../engine';
 import { allergyStatus } from '../library/allergy';
 import { rankFoods, rankPlaces, tasteFor } from '../library/personalize';
 import { clock } from '../clock';
-import { libraryConfigured, milesBetween, placesNear, searchFoods, type Food, type NutrientKey, type Place, type PlaceKind } from '../library/client';
+import { libraryConfigured, milesBetween, searchFoods, type Food, type NutrientKey, type Place, type PlaceKind } from '../library/client';
 import { useStore } from '../store/AppProvider';
 import { Body, Button, Caution, ChipGroup, Icon, Row, Small } from './components';
 import { ALLERGENS } from './labels';
+import { PlacesMap } from './PlacesMap';
 import { radius, space, type, useColors } from './theme';
+import { directionsUrl, usePlaceSearch } from './usePlaceSearch';
 
 const MAX_QUERY = 60;
 const allergenName = (a: Allergen) => ALLERGENS.find((x) => x.value === a)!.label.replace(/ allergy| free/i, '').toLowerCase();
@@ -208,70 +209,21 @@ const cuisineLabel = (x: string) => x.replace(/_/g, ' ');
 export function NearbyPanel() {
   const { state, dispatch, track } = useStore();
   const c = useColors();
-  // Location is held only while this screen is open; it is never saved.
-  const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
-  // A typed place ("64111", "Westport, Kansas City") instead of GPS. Also never saved.
-  const [where, setWhere] = useState('');
-  const [hereLabel, setHereLabel] = useState<string | null>(null);
   const [kind, setKind] = useState<PlaceKind | 'all'>('all');
-  const [places, setPlaces] = useState<Place[] | null>(null);
-  const [status, setStatus] = useState<'idle' | 'locating' | 'loading' | 'denied' | 'error' | 'not_found'>('idle');
+  const search = usePlaceSearch();
+  const { here, hereLabel, where, setWhere, places, status } = search;
 
   if (!libraryConfigured()) return <NotConnected what="places library" />;
 
-  const load = async (at: { lat: number; lon: number }, k: PlaceKind | 'all') => {
-    setStatus('loading');
-    try {
-      const found = await placesNear(at.lat, at.lon, k === 'all' ? null : k);
-      setPlaces(found);
-      setStatus('idle');
-      track('library_search', { kind: 'places', results: found.length });
-    } catch {
-      setStatus('error');
-    }
+  const k = kind === 'all' ? null : kind;
+  const locate = () => search.locate(k);
+  const findTyped = () => search.findTyped(k);
+  const pickKind = (next: PlaceKind | 'all') => {
+    setKind(next);
+    if (here) void search.load(here, next === 'all' ? null : next);
   };
-  const locate = async () => {
-    setStatus('locating');
-    try {
-      const perm = await Location.requestForegroundPermissionsAsync();
-      if (!perm.granted) {
-        setStatus('denied');
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const at = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-      setHere(at);
-      setHereLabel(null);
-      await load(at, kind);
-    } catch {
-      setStatus('error');
-    }
-  };
-  // Uses the phone's own address lookup (Apple / Google); no location permission needed.
-  const findTyped = async () => {
-    const q = where.trim();
-    if (q.length < 2 || status === 'locating') return;
-    setStatus('locating');
-    try {
-      const hits = await Location.geocodeAsync(q);
-      const hit = hits.find((h) => Number.isFinite(h.latitude) && Number.isFinite(h.longitude));
-      if (!hit) {
-        setStatus('not_found');
-        return;
-      }
-      const at = { lat: hit.latitude, lon: hit.longitude };
-      setHere(at);
-      setHereLabel(q);
-      await load(at, kind);
-    } catch {
-      setStatus('not_found'); // includes web, where address lookup isn't available
-    }
-  };
-  const pickKind = (k: PlaceKind | 'all') => {
-    setKind(k);
-    if (here) void load(here, k);
-  };
-  const directions = (p: Place) => void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`).catch(() => {});
+  const directions = (p: Place) => void Linking.openURL(directionsUrl(p)).catch(() => {});
+  const ranked = here ? rankPlaces(places ?? [], (p) => milesBetween(here.lat, here.lon, p.lat, p.lon), tasteFor(state, clock.now()), state.groceryStore?.id ?? null) : [];
 
   return (
     <View style={{ gap: space.md }}>
@@ -294,7 +246,7 @@ export function NearbyPanel() {
         <Icon name="map-outline" size={18} color={c.inkMuted} />
         <TextInput
           value={where}
-          onChangeText={(t) => setWhere(t.slice(0, MAX_QUERY))}
+          onChangeText={setWhere}
           onSubmitEditing={() => void findTyped()}
           placeholder={here ? 'Search somewhere else' : 'Or type a ZIP code or neighborhood'}
           placeholderTextColor={c.inkMuted}
@@ -321,9 +273,10 @@ export function NearbyPanel() {
       {status === 'error' ? <Body muted>Couldn’t load nearby places. Check your connection and try again.</Body> : null}
       {status === 'loading' ? <Small>Looking nearby…</Small> : null}
       {places && places.length === 0 && status === 'idle' ? <Body muted>Nothing listed within about 5 miles yet. Map data is volunteer-made and still growing.</Body> : null}
-      {here && rankPlaces(places ?? [], (p) => milesBetween(here.lat, here.lon, p.lat, p.lon), tasteFor(state, clock.now()), state.groceryStore?.id ?? null).map(({ item: p, reason, disliked }) => {
+      {here && ranked.length ? <PlacesMap here={here} places={ranked.slice(0, 15).map((r) => r.item)} /> : null}
+      {ranked.map(({ item: p, reason, disliked }) => {
         const mine = state.groceryStore?.id === p.id;
-        const miles = milesBetween(here.lat, here.lon, p.lat, p.lon);
+        const miles = here ? milesBetween(here.lat, here.lon, p.lat, p.lon) : 0;
         return (
           <View key={p.id} style={{ gap: space.xs, padding: space.md, borderRadius: 16, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface }}>
             <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>

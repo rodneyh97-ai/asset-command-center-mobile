@@ -44,3 +44,10 @@ jest.mock('expo-location', () => ({
   getCurrentPositionAsync: jest.fn(async () => ({ coords: { latitude: 39.0997, longitude: -94.5786 } })),
   geocodeAsync: jest.fn(async () => [{ latitude: 39.0389, longitude: -94.5922 }]),
 }));
+
+jest.mock('react-native-maps', () => {
+  const { View } = jest.requireActual('react-native');
+  const MapView = (props: object) => jest.requireActual('react').createElement(View, { ...props, testID: 'map' });
+  const Marker = (props: { title?: string }) => jest.requireActual('react').createElement(View, { accessibilityLabel: `Pin: ${props.title}` });
+  return { __esModule: true, default: MapView, Marker };
+});
