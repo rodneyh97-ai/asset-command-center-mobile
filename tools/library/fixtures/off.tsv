@@ -1,6 +1,6 @@
-code	product_name	brands	countries_tags	main_category_en	ingredients_text	allergens_tags	traces_tags	energy-kcal_100g	proteins_100g	fat_100g	carbohydrates_100g	sodium_100g
-0041196910759	Granola Bar	TrailCo,Other	en:united-states	Snacks	oats, honey, almonds	en:nuts,en:gluten	en:peanuts,en:nuts	450	8	18	62	0.25
-0070847811169	Plain Rice Cakes	Puffy	en:united-states,en:canada	Cereals	whole grain brown rice			387	8	3	81	
-3017620422003	Nutella	Ferrero	en:france	Spreads	sugar, palm oil, hazelnuts	en:nuts,en:milk		539	6.3	30.9	57.5	0.04
-not-a-code	Bad Code	X	en:united-states									
-0000000000017	Tab\\Slash	Y	en:united-states			en:mustard						
+code	product_name	brands	countries_tags	main_category_en	ingredients_text	allergens	traces_tags	energy-kcal_100g	proteins_100g	fat_100g	carbohydrates_100g	sodium_100g	energy_100g
+0041196910759	Granola Bar	TrailCo,Other	en:united-states	Snacks	oats, honey, almonds	en:nuts,en:gluten	en:peanuts,en:nuts	450	8	18	62	0.25	
+0070847811169	Plain Rice Cakes	Puffy	en:united-states,en:canada	Cereals	whole grain brown rice				8	3	81		1619
+3017620422003	Nutella	Ferrero	en:france	Spreads	sugar, palm oil, hazelnuts	en:nuts,en:milk		539	6.3	30.9	57.5	0.04	
+not-a-code	Bad Code	X	en:united-states										
+0000000000017	Tab\\Slash	Y	en:united-states			en:mustard							

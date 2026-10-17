@@ -70,7 +70,7 @@ test('USDA: refuses to import when a nutrient id changes meaning', async () => {
   await assert.rejects(importUsda(dir, path.join(tmp, 'x.tsv')), /1003/);
 });
 
-test('Open Food Facts: country filter, allergens, traces as may_contain, sodium g→mg', async () => {
+test('Open Food Facts (real CSV column names): country filter, allergens, traces as may_contain, sodium g→mg', async () => {
   const out = path.join(tmp, 'off.tsv');
   const n = await importOff(fx('off.tsv'), out);
   const rows = readOut(out, FOOD_COLUMNS);
@@ -85,6 +85,7 @@ test('Open Food Facts: country filter, allergens, traces as may_contain, sodium 
   assert.equal(cakes.allergens, '{}');
   assert.equal(cakes.allergens_known, 'false', 'empty allergen list = unknown');
   assert.equal(JSON.parse(cakes.nutrients).sodium_mg, undefined);
+  assert.equal(JSON.parse(cakes.nutrients).energy_kcal, 387, 'kJ-only products get kcal (1619 kJ / 4.184)');
   const odd = rows.find((r) => r.source_id === '0000000000017');
   assert.equal(odd.allergens_known, 'false', 'only unmapped allergens (mustard) = unknown for ours');
   assert.ok(odd.name.includes('\\'), 'backslashes survive COPY round trip');

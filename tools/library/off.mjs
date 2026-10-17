@@ -11,10 +11,14 @@ export async function importOff(input, outPath, { country = 'en:united-states' }
     const code = gtin(p.code);
     if (!name || !code) continue;
     const map = (field) => [...new Set((field ?? '').split(',').map((t) => ALLERGEN_TAGS[t.trim()]).filter(Boolean))];
-    const allergens = map(p.allergens_tags);
-    const mayContain = map(p.traces_tags).filter((a) => !allergens.includes(a));
+    // The CSV export names these `allergens` and `traces_tags` (the API uses `allergens_tags`).
+    const allergens = map(p.allergens_tags ?? p.allergens);
+    const mayContain = map(p.traces_tags ?? p.traces).filter((a) => !allergens.includes(a));
+    // Many products list energy only in kJ; 1 kcal = 4.184 kJ.
+    const kj = num(p['energy-kj_100g']) ?? num(p.energy_100g);
+    const kcal = num(p['energy-kcal_100g']) ?? (kj !== undefined ? Math.round((kj / 4.184) * 10) / 10 : undefined);
     const n = {
-      energy_kcal: num(p['energy-kcal_100g']),
+      energy_kcal: kcal,
       protein_g: num(p.proteins_100g),
       fat_g: num(p.fat_100g),
       sat_fat_g: num(p['saturated-fat_100g']),
