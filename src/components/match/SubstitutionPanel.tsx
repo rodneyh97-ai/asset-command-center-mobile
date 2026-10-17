@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { Player, RotationPosition, PlayerMatchStats } from '@/domain/types';
+import { useState, useMemo } from 'react';
+import { Player, RotationPosition, PlayerMatchStats, RulesetProfile, SubstitutionRecord } from '@/domain/types';
 import { getFrontRow, getBackRow, getNextRotations } from '@/domain/rotation-engine';
 import { getPlayerPlusMinus, getHittingPercentage } from '@/domain/event-sourcing';
+import { validateSubstitution } from '@/domain/substitution-validation';
+import type { SetState } from '@/domain/types';
 
 interface SubstitutionPanelProps {
   courtPlayers: RotationPosition[];
@@ -11,6 +13,8 @@ interface SubstitutionPanelProps {
   players: Player[];
   substitutionCount: number;
   playerStats?: Record<string, PlayerMatchStats>;
+  ruleset?: RulesetProfile;
+  substitutionHistory: SubstitutionRecord[];
   onConfirm: (playerOutId: string, playerInId: string) => void;
   onClose: () => void;
 }
@@ -21,6 +25,8 @@ export default function SubstitutionPanel({
   players,
   substitutionCount,
   playerStats,
+  ruleset,
+  substitutionHistory,
   onConfirm,
   onClose,
 }: SubstitutionPanelProps) {
@@ -45,8 +51,18 @@ export default function SubstitutionPanel({
 
   const nextRotations = previewPositions ? getNextRotations(previewPositions, 3) : [];
 
+  const validation = useMemo(() => {
+    if (!playerOutId || !playerInId) return null;
+    const mockSetState: Pick<SetState, 'substitutionCount' | 'substitutionHistory' | 'courtPlayers'> = {
+      substitutionCount,
+      substitutionHistory,
+      courtPlayers,
+    };
+    return validateSubstitution(mockSetState as SetState, playerOutId, playerInId, ruleset);
+  }, [playerOutId, playerInId, substitutionCount, substitutionHistory, courtPlayers, ruleset]);
+
   const handleConfirm = () => {
-    if (playerOutId && playerInId) {
+    if (playerOutId && playerInId && (!validation || validation.allowed)) {
       onConfirm(playerOutId, playerInId);
     }
   };
@@ -159,7 +175,28 @@ export default function SubstitutionPanel({
               )}
               <div className="text-xs text-slate-400 mt-2">
                 Sub count after: {substitutionCount + 1}
+                {ruleset && <span className="ml-2 text-slate-500">(limit: {ruleset.substitutionLimit})</span>}
               </div>
+
+              {/* Validation feedback */}
+              {validation && validation.errors.length > 0 && (
+                <div className="mt-2 bg-red-900/30 border border-red-500/30 rounded-lg px-3 py-2">
+                  {validation.errors.map((err, i) => (
+                    <div key={i} className="text-xs text-red-400 flex items-center gap-1.5">
+                      <span className="flex-shrink-0">✕</span> {err}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {validation && validation.warnings.length > 0 && (
+                <div className="mt-2 bg-amber-900/30 border border-amber-500/30 rounded-lg px-3 py-2">
+                  {validation.warnings.map((w, i) => (
+                    <div key={i} className="text-xs text-amber-400 flex items-center gap-1.5">
+                      <span className="flex-shrink-0">⚠</span> {w}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Next 3 rotations preview */}
               {nextRotations.length > 0 && (
@@ -190,7 +227,7 @@ export default function SubstitutionPanel({
           </button>
           <button
             onClick={handleConfirm}
-            disabled={!playerOutId || !playerInId}
+            disabled={!playerOutId || !playerInId || (validation != null && !validation.allowed)}
             className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 py-3 rounded-lg font-medium touch-manipulation"
           >
             Confirm Sub

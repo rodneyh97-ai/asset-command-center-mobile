@@ -35,6 +35,7 @@ function MatchContent() {
   const [opponentName, setOpponentName] = useState('');
   const [servingFirst, setServingFirst] = useState<ServingTeam>('us');
   const [activeLiberoIds, setActiveLiberoIds] = useState<string[]>([]);
+  const [activeRuleset, setActiveRuleset] = useState<typeof rulesets[number] | undefined>(undefined);
 
   useEffect(() => {
     if (teamId) {
@@ -55,6 +56,8 @@ function MatchContent() {
           if (events.length > 0) {
             initMatch(inProgress.id, events);
             setOpponentName(inProgress.opponentName);
+            const rs = rulesets.find((r) => r.id === inProgress.rulesetProfileId);
+            setActiveRuleset(rs);
             setSetupMode(false);
           }
         }
@@ -94,6 +97,9 @@ function MatchContent() {
       )
       .map((p) => p.id);
 
+    const rs = rulesets.find((r) => r.id === selectedRulesetId);
+    setActiveRuleset(rs);
+
     startSet(
       1,
       lineup.officialRotationOrder,
@@ -131,7 +137,7 @@ function MatchContent() {
           </span>
         </div>
         <div className="flex-1 overflow-auto">
-          <LiveMatchDashboard players={players} opponentName={opponentName} liberoIds={activeLiberoIds} />
+          <LiveMatchDashboard players={players} opponentName={opponentName} liberoIds={activeLiberoIds} ruleset={activeRuleset} />
         </div>
       </div>
     );

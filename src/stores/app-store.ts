@@ -201,7 +201,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   async seedDefaultRulesets() {
     const existing = await rulesetRepo.getAll();
-    if (existing.length > 0) {
+    const existingBodies = new Set(existing.map((r) => r.governingBody));
+    const hasAllDefaults = ['USAV', 'NFHS', 'AAU', 'NCAA', 'Custom'].every((b) => existingBodies.has(b as any));
+    if (hasAllDefaults) {
       set({ rulesets: existing });
       return;
     }
@@ -243,6 +245,40 @@ export const useAppStore = create<AppStore>((set, get) => ({
       },
       {
         id: uuidv4(),
+        name: 'AAU 2025-2026',
+        governingBody: 'AAU',
+        version: '2025-2026',
+        substitutionLimit: 18,
+        reentryBehavior: 'same-position',
+        liberoCountAllowed: 2,
+        liberoServingRule: 'one-position',
+        timeoutCount: 2,
+        setTargetScore: 25,
+        decidingSetTargetScore: 15,
+        winByTwo: true,
+        sideSwitchBehavior: 'after-set',
+        strictnessLevel: 'Coach warning',
+        customOverrides: {},
+      },
+      {
+        id: uuidv4(),
+        name: 'NCAA 2025-2026',
+        governingBody: 'NCAA',
+        version: '2025-2026',
+        substitutionLimit: 15,
+        reentryBehavior: 'same-position',
+        liberoCountAllowed: 2,
+        liberoServingRule: 'one-position',
+        timeoutCount: 2,
+        setTargetScore: 25,
+        decidingSetTargetScore: 25,
+        winByTwo: true,
+        sideSwitchBehavior: 'at-8-deciding',
+        strictnessLevel: 'Strict validation',
+        customOverrides: {},
+      },
+      {
+        id: uuidv4(),
         name: 'Practice / Flexible',
         governingBody: 'Custom',
         version: '1.0',
@@ -260,9 +296,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       },
     ];
 
-    for (const ruleset of defaults) {
+    const toAdd = defaults.filter((r) => !existingBodies.has(r.governingBody));
+    for (const ruleset of toAdd) {
       await rulesetRepo.put(ruleset);
     }
-    set({ rulesets: defaults });
+    set({ rulesets: [...existing, ...toAdd] });
   },
 }));

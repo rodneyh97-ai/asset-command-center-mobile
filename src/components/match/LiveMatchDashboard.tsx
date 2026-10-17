@@ -2,8 +2,9 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useMatchStore } from '@/stores/match-store';
-import { Player, AvailabilityStatus } from '@/domain/types';
+import { Player, AvailabilityStatus, RulesetProfile } from '@/domain/types';
 import { getCurrentServer, getNextServer } from '@/domain/rotation-engine';
+import { getSetPointInfo } from '@/domain/substitution-validation';
 import VolleyballCourt from '@/components/court/VolleyballCourt';
 import SubstitutionPanel from './SubstitutionPanel';
 import LiberoPanel from './LiberoPanel';
@@ -20,21 +21,19 @@ interface LiveMatchDashboardProps {
   opponentName: string;
   teamName?: string;
   liberoIds?: string[];
+  ruleset?: RulesetProfile;
+  setsToWin?: number;
 }
 
 type ActivePanel = null | 'substitute' | 'libero' | 'playerStatus' | 'rotationPreview' | 'correct' | 'history' | 'stats' | 'highlights';
-
-function isMatchPoint(ourScore: number, opponentScore: number, targetScore: number): 'us' | 'opponent' | null {
-  if (ourScore >= targetScore - 1 && ourScore > opponentScore) return 'us';
-  if (opponentScore >= targetScore - 1 && opponentScore > ourScore) return 'opponent';
-  return null;
-}
 
 export default function LiveMatchDashboard({
   players,
   opponentName,
   teamName,
   liberoIds = [],
+  ruleset,
+  setsToWin = 3,
 }: LiveMatchDashboardProps) {
   const {
     state,
@@ -88,8 +87,17 @@ export default function LiveMatchDashboard({
   const setsWon = completedSets.filter((s) => s.ourScore > s.opponentScore).length;
   const setsLost = completedSets.filter((s) => s.opponentScore > s.ourScore).length;
 
-  // Match point detection (standard set to 25)
-  const matchPointStatus = isMatchPoint(currentSet.ourScore, currentSet.opponentScore, 25);
+  // Ruleset-aware set/match point detection
+  const isDecidingSet = setsWon === setsToWin - 1 || setsLost === setsToWin - 1;
+  const targetScore = ruleset
+    ? (isDecidingSet ? ruleset.decidingSetTargetScore : ruleset.setTargetScore)
+    : 25;
+  const winByTwo = ruleset?.winByTwo ?? true;
+  const setPointInfo = getSetPointInfo(currentSet.ourScore, currentSet.opponentScore, targetScore, winByTwo);
+  const isMatchPointForUs = setPointInfo?.team === 'us' && setsWon === setsToWin - 1;
+  const isMatchPointForThem = setPointInfo?.team === 'opponent' && setsLost === setsToWin - 1;
+  const matchPointStatus = isMatchPointForUs ? 'us' : isMatchPointForThem ? 'opponent' : null;
+  const setPointStatus = !matchPointStatus ? setPointInfo?.team ?? null : null;
 
   // Find active libero info for the status bar
   const activeLiberoPlayer = currentSet.activeLiberoId
@@ -129,12 +137,19 @@ export default function LiveMatchDashboard({
               </div>
             </div>
 
-            {/* Match point indicator */}
+            {/* Match/Set point indicator */}
             {matchPointStatus && (
-              <div className={`text-center text-sm font-bold mb-2 py-1 rounded ${
-                matchPointStatus === 'us' ? 'bg-green-700/50 text-green-300' : 'bg-red-700/50 text-red-300'
+              <div className={`text-center text-sm font-bold mb-2 py-1.5 rounded-lg animate-pulse ${
+                matchPointStatus === 'us' ? 'bg-green-700/50 text-green-300 border border-green-500/30' : 'bg-red-700/50 text-red-300 border border-red-500/30'
               }`}>
                 MATCH POINT {matchPointStatus === 'us' ? displayTeamName.toUpperCase() : opponentName.toUpperCase()}
+              </div>
+            )}
+            {setPointStatus && (
+              <div className={`text-center text-xs font-semibold mb-2 py-1 rounded ${
+                setPointStatus === 'us' ? 'bg-blue-700/40 text-blue-300' : 'bg-amber-700/40 text-amber-300'
+              }`}>
+                SET POINT {setPointStatus === 'us' ? displayTeamName.toUpperCase() : opponentName.toUpperCase()}
               </div>
             )}
 
@@ -406,6 +421,8 @@ export default function LiveMatchDashboard({
           players={players}
           substitutionCount={currentSet.substitutionCount}
           playerStats={currentSet.playerStats}
+          ruleset={ruleset}
+          substitutionHistory={currentSet.substitutionHistory}
           onConfirm={(outId, inId) => {
             confirmSubstitution(outId, inId);
             setActivePanel(null);

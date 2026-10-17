@@ -32,7 +32,7 @@ export type StrictnessLevel =
   | 'Strict validation'
   | 'Practice / flexible';
 
-export type GoverningBody = 'USAV' | 'NFHS' | 'AAU' | 'Custom';
+export type GoverningBody = 'USAV' | 'NFHS' | 'AAU' | 'NCAA' | 'Custom';
 
 export type MatchStatus = 'Planned' | 'In Progress' | 'Completed' | 'Cancelled';
 
