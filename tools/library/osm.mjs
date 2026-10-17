@@ -1,5 +1,6 @@
 // OpenStreetMap (ODbL) → places.tsv, from an Overpass API JSON response.
-// Get data:  curl -s https://overpass-api.de/api/interpreter --data-urlencode "data@overpass.ql" > area.json
+// Get data:  curl -s https://overpass.kumi.systems/api/interpreter   (mirror; overpass-api.de resets connections from the cloud env)
+//            or https://overpass-api.de/api/interpreter --data-urlencode "data@overpass.ql" > area.json
 // (edit the bounding box in overpass.ql first). Usage: node osm.mjs area.json places.tsv
 import fs from 'node:fs';
 import { PLACE_COLUMNS, clean, writer } from './lib.mjs';
