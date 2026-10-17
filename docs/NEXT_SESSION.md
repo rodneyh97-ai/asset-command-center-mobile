@@ -6,7 +6,13 @@
   151 cafés, 86 grocery, 139 convenience) from OpenStreetMap via the `overpass.kumi.systems` mirror. DB 227 MB / 500 MB.
 - Library screens built and verified against the live server (Explore tab: Meal ideas / Foods / Near me; migrations 0005–0006).
   `mobile/.env.development` has the public URL + publishable key.
-- Remaining: widen `tools/library/overpass.ql` to where testers live (ask founder for cities/ZIPs); founder device test.
+- Places widened to the whole Kansas City metro (D22, 2026-10-17, cloud session): bbox 38.78,-94.95,39.36,-94.18 in
+  `tools/library/overpass.ql` covers KC MO incl. Northland, Independence, Raytown, Grandview, Lee's Summit, Blue Springs,
+  KC KS (66103), Overland Park, Olathe, Lenexa, Shawnee / Mission, Prairie Village. Downloaded in 4 quadrants from
+  `overpass.kumi.systems` (it 500s often; retry), 3,281 places upserted. `public.places` now has 3,301 rows
+  (1,354 restaurants, 1,101 fast food, 333 convenience, 296 cafés, 217 grocery); the extra 20 are older central-KC rows no
+  longer in OSM (kept, nothing deleted). DB 230 MB / 500 MB. `places_near` returns rows for Lee's Summit and Olathe.
+- Remaining: founder device test.
 
 ---
 
