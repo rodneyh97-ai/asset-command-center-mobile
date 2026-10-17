@@ -72,3 +72,6 @@ export function usePlaceSearch() {
 }
 
 export const directionsUrl = (p: Pick<Place, 'lat' | 'lon'>) => `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`;
+/** A web search for the place's own menu (EatOS has no menu data of its own). */
+export const menuSearchUrl = (p: Pick<Place, 'name' | 'street'>) =>
+  `https://www.google.com/search?q=${encodeURIComponent([p.name, p.street, 'menu'].filter(Boolean).join(' '))}`;

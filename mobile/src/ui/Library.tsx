@@ -13,7 +13,7 @@ import { Body, Button, Caution, ChipGroup, Icon, Row, Small } from './components
 import { ALLERGENS } from './labels';
 import { PlacesMap } from './PlacesMap';
 import { radius, space, type, useColors } from './theme';
-import { directionsUrl, usePlaceSearch } from './usePlaceSearch';
+import { directionsUrl, menuSearchUrl, usePlaceSearch } from './usePlaceSearch';
 
 const MAX_QUERY = 60;
 const allergenName = (a: Allergen) => ALLERGENS.find((x) => x.value === a)!.label.replace(/ allergy| free/i, '').toLowerCase();
@@ -307,6 +307,10 @@ export function NearbyPanel() {
                       if (!mine) track('grocery_store_set');
                     }}
                   />
+                </View>
+              ) : p.kind === 'restaurant' || p.kind === 'fast_food' || p.kind === 'cafe' ? (
+                <View style={{ flex: 1 }}>
+                  <Button label="Menu" variant="secondary" icon="restaurant-outline" a11yLabel={`Look up the menu for ${p.name}`} onPress={() => void Linking.openURL(menuSearchUrl(p)).catch(() => {})} />
                 </View>
               ) : null}
             </Row>

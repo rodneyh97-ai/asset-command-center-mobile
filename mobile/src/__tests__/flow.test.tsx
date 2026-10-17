@@ -909,13 +909,13 @@ describe('food & place library', () => {
     await screen.findByLabelText('Search meal ideas');
   });
 
-  const seedAt = (setting: string, allergens: string[] = []) =>
+  const seedAt = (setting: string, allergens: string[] = [], history: object[] = []) =>
     AsyncStorage.setItem(
       'eatos.state.v1',
       JSON.stringify({
         version: 1,
         profile: { goal: 'eat_better', struggles: [], cuisines: [], allergens, diets: [], budget: 2, considerations: [], createdAt: new Date().toISOString() },
-        history: [],
+        history,
         lastContext: { setting, hunger: 'normal', time: 20, budget: 2, feeling: 'fine' },
         analytics: [],
       }),
@@ -936,7 +936,7 @@ describe('food & place library', () => {
   it('drive estimates are rough and never below 2 minutes', () => {
     expect(driveMinutes(0.5)).toBe(2);
     expect(driveMinutes(5)).toBe(16);
-    expect(distanceLabel(0.2)).toMatch(/min walk/);
+    expect(distanceLabel(0.2)).toBe('0.2 mi · about 2 min drive');
     expect(distanceLabel(3)).toBe('3.0 mi · about 9 min drive');
   });
 
@@ -963,7 +963,8 @@ describe('food & place library', () => {
       { id: 21, kind: 'restaurant', name: 'Near Diner', cuisines: ['american'], lat: 39.0998, lon: -94.5787, street: null },
       { id: 22, kind: 'restaurant', name: 'Far Taqueria', cuisines: ['mexican'], lat: 39.13, lon: -94.6, street: null },
     ]);
-    await seedAt('takeout');
+    // I've been eating Mexican lately (for "somewhere different" below).
+    await seedAt('takeout', [], [{ mealId: 'burrito-bowl', kind: 'accepted', at: new Date(Date.now() - 86400000).toISOString() }]);
     renderRouter(routes, { initialUrl: '/decide' });
     fireEvent.press(await screen.findByText('Show places near me'));
     await screen.findByLabelText('Directions to Near Diner');
@@ -975,8 +976,16 @@ describe('food & place library', () => {
     expect(taco.length).toBeGreaterThan(0);
     for (const t of taco) expect(CATALOG.find((m) => `Choose ${m.name} at Far Taqueria` === t.props.accessibilityLabel)?.cuisine).toBe('mexican');
     expect(screen.getAllByText(/dishes most Mexican spots have/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/min walk/)).toBeTruthy(); // Near Diner is a few steps away
-    expect(screen.getByText(/mi · about \d+ min drive/)).toBeTruthy(); // Far Taqueria is a drive
+    expect(screen.queryByText(/min walk/)).toBeNull(); // always a drive estimate
+    expect(screen.getAllByText(/mi · about \d+ min drive/).length).toBe(2);
+    expect(screen.getAllByText(/Top pick for you/).length).toBeGreaterThan(0);
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    fireEvent.press(screen.getByLabelText('Look up the menu for Far Taqueria'));
+    expect(open).toHaveBeenCalledWith('https://www.google.com/search?q=Far%20Taqueria%20menu');
+    // "Somewhere different": places with food I haven't had lately come first.
+    fireEvent.press(screen.getByLabelText('Show places with food I haven’t had lately'));
+    await screen.findByText('Something different for you');
+    expect(screen.getByText(/food you haven’t had lately first/)).toBeTruthy();
     expect(screen.getByText(/OpenStreetMap contributors/)).toBeTruthy();
     screen.unmount();
     await seedAt('home');
