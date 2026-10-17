@@ -53,9 +53,9 @@ const FOOD_WORDS: [string, Ingredient[]][] = [
 ];
 
 const CUISINE_WORDS: [string, Cuisine][] = [
-  ['middle eastern', 'mediterranean'], ['mexican', 'mexican'], ['tacos', 'mexican'], ['burritos', 'mexican'],
+  ['middle eastern', 'middle_eastern'], ['lebanese', 'middle_eastern'], ['falafel', 'middle_eastern'], ['shawarma', 'middle_eastern'], ['mexican', 'mexican'], ['tacos', 'mexican'], ['burritos', 'mexican'],
   ['italian', 'italian'], ['pizza', 'italian'],
-  ['asian', 'asian'], ['chinese', 'asian'], ['japanese', 'asian'], ['thai', 'asian'], ['korean', 'asian'], ['vietnamese', 'asian'], ['sushi', 'asian'],
+  ['asian', 'asian'], ['poke', 'asian'], ['chinese', 'chinese'], ['japanese', 'japanese'], ['sushi', 'japanese'], ['ramen', 'japanese'], ['thai', 'thai'], ['korean', 'korean'], ['vietnamese', 'vietnamese'], ['pho', 'vietnamese'],
   ['mediterranean', 'mediterranean'], ['greek', 'mediterranean'], ['indian', 'indian'],
   ['american', 'american'], ['bbq', 'american'], ['barbecue', 'american'],
 ];

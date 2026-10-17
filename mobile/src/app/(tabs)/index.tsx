@@ -292,14 +292,15 @@ export default function Home() {
             setMood(t.slice(0, MAX_TYPED));
             setMoodRead(null);
           }}
-          onSubmitEditing={() => void applyMood()}
+          onSubmitEditing={decide}
           maxLength={MAX_TYPED}
           placeholder="Optional, e.g. tired, want something cheesy and quick"
           placeholderTextColor={c.inkMuted}
           accessibilityLabel="What are you in the mood for?"
-          returnKeyType="done"
+          returnKeyType="go"
           style={[type.body, { color: c.ink, borderWidth: 1, borderColor: c.border, borderRadius: radius.md, padding: space.md, backgroundColor: c.surface }]}
         />
+        {mood.trim().length >= 2 ? <Button label="Pick for me" iconRight="arrow-forward" a11yLabel="Pick for me based on what I typed" onPress={decide} /> : null}
         {moodRead ? (
           <View accessibilityLiveRegion="polite">
             <Small muted={false}>{moodRead}</Small>

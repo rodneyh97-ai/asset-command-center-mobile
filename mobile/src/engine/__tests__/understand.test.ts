@@ -13,7 +13,7 @@ describe('what are you in the mood for?', () => {
   it('“no time” is about time, not a dislike; places and budget are read too', () => {
     const m = understandMood('no time, ordering in, something cheap, craving thai');
     expect(m.patch).toEqual({ time: 10, setting: 'takeout', budget: 1 });
-    expect(m.cuisines).toEqual(['asian']);
+    expect(m.cuisines).toEqual(['thai']);
     expect(m.avoid).toEqual([]);
   });
   it('steers one recommendation toward the craving and away from what to avoid, never past allergies', () => {
@@ -44,7 +44,7 @@ describe('understanding typed answers', () => {
 
   it('a bare list takes the meaning of where it was typed', () => {
     expect(understandFoodText('olives, raw tomatoes', 'dislike').dislikes).toEqual(['olives', 'tomato']);
-    expect(understandFoodText('sushi and anything with cheese', 'like')).toMatchObject({ likes: ['cheese'], cuisines: ['asian'] });
+    expect(understandFoodText('sushi and anything with cheese', 'like')).toMatchObject({ likes: ['cheese'], cuisines: ['japanese'] });
   });
 
   it('the later statement wins when a food is mentioned twice', () => {

@@ -16,8 +16,14 @@ export type Cuisine =
   | 'american'
   | 'mexican'
   | 'italian'
-  | 'asian'
-  | 'mediterranean'
+  | 'asian' // fusion and bowls (poke, rice bowls)
+  | 'chinese'
+  | 'japanese'
+  | 'thai'
+  | 'korean'
+  | 'vietnamese'
+  | 'mediterranean' // Greek and similar
+  | 'middle_eastern'
   | 'indian'
   | 'breakfast'
   | 'simple';

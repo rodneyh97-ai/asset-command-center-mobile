@@ -22,7 +22,7 @@ import type {
 export const VALID = {
   goal: ['eat_better', 'lose_weight', 'maintain', 'build_muscle', 'more_energy'] as Goal[],
   struggle: ['no_time', 'decision_fatigue', 'cravings', 'budget', 'cooking', 'eating_out'] as Struggle[],
-  cuisine: ['american', 'mexican', 'italian', 'asian', 'mediterranean', 'indian', 'breakfast', 'simple'] as Cuisine[],
+  cuisine: ['american', 'mexican', 'italian', 'asian', 'chinese', 'japanese', 'thai', 'korean', 'vietnamese', 'mediterranean', 'middle_eastern', 'indian', 'breakfast', 'simple'] as Cuisine[],
   allergen: ['peanut', 'tree_nut', 'dairy', 'egg', 'gluten', 'soy', 'fish', 'shellfish', 'sesame'] as Allergen[],
   diet: ['vegetarian', 'vegan', 'pescatarian', 'no_pork', 'no_red_meat'] as Diet[],
   budget: [1, 2, 3, 4] as BudgetTier[],
@@ -50,13 +50,22 @@ const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
  * Returns null only when the safety-critical fields are unreadable, so the user is
  * asked again rather than silently treated as having no allergies.
  */
+/** Profiles saved before "Asian" and "Mediterranean" were split keep everything they liked. */
+function splitOldCuisines(cs: Cuisine[]): Cuisine[] {
+  const out = [...cs];
+  const add = (xs: Cuisine[]) => xs.forEach((x) => (out.includes(x) ? null : out.push(x)));
+  if (cs.includes('asian') && !cs.some((c) => ['chinese', 'japanese', 'thai', 'korean', 'vietnamese'].includes(c))) add(['chinese', 'japanese', 'thai', 'korean', 'vietnamese']);
+  if (cs.includes('mediterranean') && !cs.includes('middle_eastern')) add(['middle_eastern']);
+  return out;
+}
+
 export function sanitizeProfile(raw: unknown): Profile | null {
   if (!isObj(raw)) return null;
   if (!Array.isArray(raw.allergens) || !Array.isArray(raw.diets)) return null;
   return {
     goal: oneOf(VALID.goal, raw.goal, 'eat_better'),
     struggles: listOf(VALID.struggle, raw.struggles),
-    cuisines: listOf(VALID.cuisine, raw.cuisines),
+    cuisines: splitOldCuisines(listOf(VALID.cuisine, raw.cuisines)),
     allergens: listOf(VALID.allergen, raw.allergens),
     diets: listOf(VALID.diet, raw.diets),
     budget: oneOf(VALID.budget, raw.budget, 2),

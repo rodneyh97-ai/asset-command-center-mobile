@@ -60,7 +60,7 @@ describe('library follows what EatOS learned', () => {
   it('my grocery store stays first; OSM cuisine tags map to EatOS cuisines', () => {
     const r = rankPlaces([place(1, [], 0.1), place(2, [], 3)], (p) => p.lat, tasteFor(base({}), now), 2);
     expect(r[0]).toMatchObject({ reason: 'Your grocery store' });
-    expect(placeCuisines({ cuisines: ['tex_mex', 'pizza', 'sushi', 'unknown'] })).toEqual(['mexican', 'italian', 'asian']);
+    expect(placeCuisines({ cuisines: ['tex_mex', 'pizza', 'sushi', 'unknown'] })).toEqual(['mexican', 'italian', 'japanese']);
   });
 });
 

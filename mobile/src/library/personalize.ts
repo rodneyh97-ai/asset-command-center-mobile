@@ -13,7 +13,8 @@ export interface Taste {
 }
 
 const CUISINE_WORD: Record<Cuisine, string> = {
-  american: 'American', mexican: 'Mexican', italian: 'Italian', asian: 'Asian', mediterranean: 'Mediterranean',
+  american: 'American', mexican: 'Mexican', italian: 'Italian', asian: 'Asian', chinese: 'Chinese', japanese: 'Japanese', thai: 'Thai', korean: 'Korean', vietnamese: 'Vietnamese',
+  mediterranean: 'Mediterranean', middle_eastern: 'Middle Eastern',
   indian: 'Indian', breakfast: 'breakfast spots', simple: 'simple food',
 };
 
@@ -69,8 +70,8 @@ export function rankFoods(foods: Food[], taste: Taste): Ranked<Food>[] {
 const OSM_CUISINE: Record<string, Cuisine> = {
   mexican: 'mexican', tex_mex: 'mexican', tacos: 'mexican', taco: 'mexican', burrito: 'mexican', latin_american: 'mexican',
   italian: 'italian', pizza: 'italian', pasta: 'italian',
-  chinese: 'asian', japanese: 'asian', sushi: 'asian', thai: 'asian', vietnamese: 'asian', korean: 'asian', asian: 'asian', ramen: 'asian', noodle: 'asian', pho: 'asian', filipino: 'asian',
-  mediterranean: 'mediterranean', greek: 'mediterranean', lebanese: 'mediterranean', middle_eastern: 'mediterranean', turkish: 'mediterranean', falafel: 'mediterranean', kebab: 'mediterranean', persian: 'mediterranean',
+  chinese: 'chinese', japanese: 'japanese', sushi: 'japanese', ramen: 'japanese', thai: 'thai', vietnamese: 'vietnamese', pho: 'vietnamese', korean: 'korean', asian: 'asian', noodle: 'asian', filipino: 'asian', poke: 'asian',
+  mediterranean: 'mediterranean', greek: 'mediterranean', lebanese: 'middle_eastern', middle_eastern: 'middle_eastern', turkish: 'middle_eastern', falafel: 'middle_eastern', kebab: 'middle_eastern', persian: 'middle_eastern',
   indian: 'indian', pakistani: 'indian', nepalese: 'indian',
   breakfast: 'breakfast', pancake: 'breakfast', bagel: 'breakfast', brunch: 'breakfast', donut: 'breakfast',
   american: 'american', burger: 'american', bbq: 'american', barbecue: 'american', chicken: 'american', sandwich: 'american', steak_house: 'american', diner: 'american', hot_dog: 'american', wings: 'american',
