@@ -42,6 +42,9 @@ test('USDA: generic foods are verified, nutrients mapped, unknown allergens neve
   // First value wins; water (not mapped) is ignored.
   assert.deepEqual(JSON.parse(broccoli.nutrients), { energy_kcal: 34, protein_g: 2.82, vitamin_c_mg: 89.2 });
   assert.equal(broccoli.allergens_known, 'false');
+  // Newer Foundation data: calories and sugars under fallback ids, used only when the main id is missing.
+  const egg = rows.find((r) => r.source_id === '748967');
+  assert.deepEqual(JSON.parse(egg.nutrients), { energy_kcal: 143, protein_g: 12.4, iron_mg: 1.67, sugars_g: 0.2 });
   assert.ok(!rows.some((r) => r.source_id === '999'), 'survey foods skipped');
 });
 

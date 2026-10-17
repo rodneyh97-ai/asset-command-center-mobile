@@ -15,6 +15,12 @@ const NUTRIENT_NAMES = {
   2000: /sugars/i, 1093: /^sodium/i, 1087: /^calcium/i, 1089: /^iron/i, 1092: /^potassium/i, 1162: /vitamin c/i,
   1114: /vitamin d/i, 1178: /vitamin b-?12/i, 1090: /^magnesium/i, 1095: /^zinc/i,
 };
+// Newer Foundation releases report some values under different ids. Used only when the main id is missing,
+// in this order (2048/2047 = calories by Atwater factors; 1063 = total sugars; 2033 = AOAC 2011.25 fiber).
+export const FALLBACKS = { energy_kcal: [2048, 2047], sugars_g: [1063], fiber_g: [2033] };
+Object.assign(NUTRIENT_NAMES, { 2048: /^energy/i, 2047: /^energy/i, 1063: /sugars/i, 2033: /fiber/i });
+const FALLBACK_ID = new Map(Object.entries(FALLBACKS).flatMap(([key, ids]) => ids.map((id, i) => [String(id), { key, rank: i + 1 }])));
+
 const GENERIC = new Set(['foundation_food', 'sr_legacy_food']);
 
 export async function importUsda(dir, outPath, { branded = false } = {}) {
@@ -31,13 +37,21 @@ export async function importUsda(dir, outPath, { branded = false } = {}) {
   const wanted = new Map();
   for await (const f of readTable(path.join(dir, 'food.csv'))) {
     const isGeneric = GENERIC.has(f.data_type);
-    if (isGeneric || (branded && f.data_type === 'branded_food')) wanted.set(f.fdc_id, { f, nutrients: {} });
+    if (isGeneric || (branded && f.data_type === 'branded_food')) wanted.set(f.fdc_id, { f, nutrients: {}, rank: {} });
   }
   for await (const fn of readTable(path.join(dir, 'food_nutrient.csv'))) {
     const w = wanted.get(fn.fdc_id);
-    const key = NUTRIENTS[fn.nutrient_id];
     const amount = num(fn.amount);
-    if (w && key && amount !== undefined && w.nutrients[key] === undefined) w.nutrients[key] = Math.round(amount * 100) / 100;
+    if (!w || amount === undefined) continue;
+    // rank 0 = the main id; fallbacks fill in only when nothing better was found.
+    const main = NUTRIENTS[fn.nutrient_id];
+    const hit = main ? { key: main, rank: 0 } : FALLBACK_ID.get(fn.nutrient_id);
+    if (!hit) continue;
+    const prev = w.rank[hit.key];
+    if (prev === undefined || hit.rank < prev) {
+      w.nutrients[hit.key] = Math.round(amount * 100) / 100;
+      w.rank[hit.key] = hit.rank;
+    }
   }
   const brandInfo = new Map();
   if (branded) for await (const b of readTable(path.join(dir, 'branded_food.csv'))) if (wanted.has(b.fdc_id)) brandInfo.set(b.fdc_id, b);
