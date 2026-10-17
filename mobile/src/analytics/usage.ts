@@ -30,6 +30,10 @@ type Fetch = (url: string, init: { method: string; headers: Record<string, strin
 
 // Legacy anon keys are JWTs and also go in Authorization; new publishable keys (sb_publishable_…)
 // are not JWTs and must only be sent as `apikey`.
+export const serverUrl = () => URL;
+/** Headers for the EatOS server's public API. */
+export const serverHeaders = (key: string = KEY): Record<string, string> => headers(key);
+
 const headers = (key: string): Record<string, string> => ({
   apikey: key,
   ...(key.startsWith('eyJ') ? { Authorization: `Bearer ${key}` } : {}),

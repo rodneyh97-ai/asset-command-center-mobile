@@ -58,6 +58,8 @@ export interface AppState {
   welcomeBack: boolean;
   /** When the app-store rating prompt was shown (max 3, at least 120 days apart). */
   reviewPrompts: string[];
+  /** The grocery store the user picked from the place library (id + name only; no location kept). */
+  groceryStore: { id: number; name: string } | null;
   /**
    * Raw stored data we couldn't read (newer app version, corruption). Never persisted
    * as state; the provider copies it to a backup key before anything overwrites it.
@@ -110,6 +112,7 @@ export const initialState: AppState = {
   lastOpenAt: null,
   welcomeBack: false,
   reviewPrompts: [],
+  groceryStore: null,
 };
 
 export type Action =
@@ -147,7 +150,8 @@ export type Action =
   | { type: 'setWeeklyGoal'; goal: WeeklyGoal | null }
   | { type: 'opened'; at: string }
   | { type: 'dismissWelcomeBack' }
-  | { type: 'reviewPrompted'; at: string };
+  | { type: 'reviewPrompted'; at: string }
+  | { type: 'setGroceryStore'; store: AppState['groceryStore'] };
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -266,6 +270,8 @@ export function reducer(state: AppState, action: Action): AppState {
     }
     case 'dismissWelcomeBack':
       return { ...state, welcomeBack: false };
+    case 'setGroceryStore':
+      return { ...state, groceryStore: action.store };
     case 'reviewPrompted':
       return { ...state, reviewPrompts: [...state.reviewPrompts, action.at].slice(-3) };
   }
@@ -331,6 +337,7 @@ export function parseStored(raw: string | null): AppState {
     lastOpenAt: isDate(d.lastOpenAt) ? (d.lastOpenAt as string) : null,
     welcomeBack: false,
     reviewPrompts: Array.isArray(d.reviewPrompts) ? d.reviewPrompts.filter(isDate).slice(-3) : [],
+    groceryStore: sanitizeGroceryStore(d.groceryStore),
   };
 }
 
@@ -355,6 +362,13 @@ function sanitizeUsage(raw: unknown): AppState['usageSharing'] {
     installId: on ? id : null,
     sentDays: on && Array.isArray(r.sentDays) ? r.sentDays.filter((n): n is number => Number.isInteger(n) && n >= 0 && n <= 3650).slice(-120) : [],
   };
+}
+
+function sanitizeGroceryStore(raw: unknown): AppState['groceryStore'] {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (!Number.isInteger(r.id) || (r.id as number) < 1 || typeof r.name !== 'string' || !r.name.trim()) return null;
+  return { id: r.id as number, name: r.name.trim().slice(0, 200) };
 }
 
 function sanitizeWeeklyGoal(raw: unknown): WeeklyGoal | null {

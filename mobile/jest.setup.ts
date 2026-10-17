@@ -37,3 +37,9 @@ jest.mock('expo-crypto', () => {
   let n = 0;
   return { randomUUID: jest.fn(() => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`) };
 });
+
+jest.mock('expo-location', () => ({
+  Accuracy: { Balanced: 3 },
+  requestForegroundPermissionsAsync: jest.fn(async () => ({ granted: true })),
+  getCurrentPositionAsync: jest.fn(async () => ({ coords: { latitude: 39.0997, longitude: -94.5786 } })),
+}));

@@ -41,7 +41,9 @@ export type AnalyticsName =
   | 'usage_sharing_changed'
   | 'weekly_goal_set'
   | 'welcome_back_shown'
-  | 'review_prompted';
+  | 'review_prompted'
+  | 'library_search'
+  | 'grocery_store_set';
 
 export interface AnalyticsEvent {
   name: AnalyticsName;

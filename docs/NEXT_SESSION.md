@@ -4,8 +4,9 @@
 - April schema archived to `legacy_april` (D21); migrations 0001–0004 applied; founder is owner admin.
 - Loaded: 8,229 USDA foods, 175,273 grocery products, 1,366 Kansas City places (620 restaurants, 370 fast food,
   151 cafés, 86 grocery, 139 convenience) from OpenStreetMap via the `overpass.kumi.systems` mirror. DB 227 MB / 500 MB.
-- Remaining: write `mobile/.env` from `$EXPO_PUBLIC_SUPABASE_ANON_KEY` (wasn't visible to the old session), then build
-  the library screens (food search, nearby places, "my grocery store") and show source attribution.
+- Library screens built and verified against the live server (Explore tab: Meal ideas / Foods / Near me; migrations 0005–0006).
+  `mobile/.env.development` has the public URL + publishable key.
+- Remaining: widen `tools/library/overpass.ql` to where testers live (ask founder for cities/ZIPs); founder device test.
 
 ---
 

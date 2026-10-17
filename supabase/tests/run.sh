@@ -14,7 +14,7 @@ psql_f() { # file [extra psql args]
   [ -n "$out" ] && echo "$out"
   return 0
 }
-for f in local_stub.sql ../migrations/0001_init.sql ../migrations/0002_library.sql ../migrations/0003_retention.sql grants.sql ../migrations/0004_hardening.sql rls_test.sql; do psql_f "$PWD/$f"; done
+for f in local_stub.sql ../migrations/0001_init.sql ../migrations/0002_library.sql ../migrations/0003_retention.sql grants.sql ../migrations/0004_hardening.sql ../migrations/0005_public_library.sql ../migrations/0006_search_words.sql rls_test.sql; do psql_f "$PWD/$f"; done
 # Library: import fixtures with the real importers, load twice (must be idempotent), then test.
 node -e "
   const [u, o, s] = await Promise.all(['usda','off','osm'].map((m) => import('$LIB/' + m + '.mjs')));

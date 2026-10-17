@@ -49,7 +49,8 @@ export async function importUsda(dir, outPath, { branded = false } = {}) {
     if (!hit) continue;
     const prev = w.rank[hit.key];
     if (prev === undefined || hit.rank < prev) {
-      w.nutrients[hit.key] = Math.round(amount * 100) / 100;
+      // Carbs "by difference" can come out slightly negative; that means ~0.
+      w.nutrients[hit.key] = Math.max(0, Math.round(amount * 100) / 100);
       w.rank[hit.key] = hit.rank;
     }
   }

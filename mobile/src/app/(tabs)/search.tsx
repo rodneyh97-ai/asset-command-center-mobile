@@ -8,6 +8,7 @@ import { memoriesNow } from '../../store/state';
 import { useActiveProfile } from '../../store/useActiveProfile';
 import { useStore } from '../../store/AppProvider';
 
+import { FoodsPanel, NearbyPanel } from '../../ui/Library';
 import { Body, Caution, ChipGroup, Icon, IconTile, MealArt, Row, Screen, Small, Tags, Title } from '../../ui/components';
 import { SETTINGS } from '../../ui/labels';
 import { MealFacts } from '../../ui/MealDetail';
@@ -23,9 +24,30 @@ const FILTERS: { value: Filter; label: string; test: (m: MealIdea) => boolean }[
   { value: 'budget', label: 'Budget', test: (m) => m.budget === 1 },
 ];
 const MAX_QUERY = 60;
+type Section = 'ideas' | 'foods' | 'nearby';
+const SECTIONS: { value: Section; label: string }[] = [
+  { value: 'ideas', label: 'Meal ideas' },
+  { value: 'foods', label: 'Foods' },
+  { value: 'nearby', label: 'Near me' },
+];
 
 export default function Search() {
-  const { state, ready, track } = useStore();
+  const { state, ready } = useStore();
+  const p = useActiveProfile(state);
+  const [section, setSection] = useState<Section>('ideas');
+  if (!ready) return null; // wait for saved data before deciding where to go
+  if (!p) return <Redirect href="/onboarding" />;
+  return (
+    <Screen edges={['top', 'left', 'right']}>
+      <Title>Explore</Title>
+      <ChipGroup stretch label="What to explore" options={SECTIONS} value={section} onChange={setSection} />
+      {section === 'ideas' ? <Ideas /> : section === 'foods' ? <FoodsPanel profile={p} /> : <NearbyPanel />}
+    </Screen>
+  );
+}
+
+function Ideas() {
+  const { state, track } = useStore();
   const c = useColors();
   const p = useActiveProfile(state);
   const [setting, setSetting] = useState<Setting>(() => (state.lastContext?.setting === 'home' ? 'restaurant' : (state.lastContext?.setting ?? 'restaurant')));
@@ -47,12 +69,10 @@ export default function Search() {
     );
   }, [p, setting, filter, query, memories]);
 
-  if (!ready) return null; // wait for saved data before deciding where to go
-  if (!p) return <Redirect href="/onboarding" />;
+  if (!p) return null;
 
   return (
-    <Screen edges={['top', 'left', 'right']}>
-      <Title>Explore ideas</Title>
+    <>
       <View style={[{ flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, borderRadius: radius.md, paddingHorizontal: space.md, minHeight: 48 }]}>
         <Icon name="search" size={18} color={c.inkMuted} />
         <TextInput
@@ -120,6 +140,6 @@ export default function Search() {
           </Pressable>
         ))}
       </View>
-    </Screen>
+    </>
   );
 }

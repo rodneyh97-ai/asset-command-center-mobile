@@ -22,9 +22,20 @@ select pg_temp.expect((select may_contain from public.foods where source_id = '0
 select pg_temp.expect((select (nutrients->>'protein_g')::numeric from public.foods where source_id = '748967') = 12.4, 'nutrients stored per 100 g');
 
 set role anon;
+select pg_temp.expect((select count(*) from public.foods) = 5, 'signed-out app can read the public food library');
+select pg_temp.expect((select string_agg(source_id, ',') from public.search_foods('broc')) = '170379', 'food search finds by name');
+select pg_temp.expect((select count(*) from public.search_foods('%')) = 0, 'wildcards alone match nothing');
+select pg_temp.expect((select string_agg(source_id, ',') from public.search_foods('raw broccoli')) = '170379', 'words match in any order ("raw broccoli" finds "Broccoli, raw")');
+select pg_temp.expect((select count(*) from public.search_foods('broccoli pizza')) = 0, 'every word must match');
+select pg_temp.expect((select string_agg(source_id, ',') from public.search_foods('trailco granola')) = '0041196910759', 'brand + name words both count');
+select pg_temp.expect((select count(*) from public.search_foods('a')) = 0, 'one letter is too short to search');
+select pg_temp.expect((select count(*) from public.search_foods('acme')) = 0, 'branded USDA food not imported without --branded');
+select pg_temp.expect((select source from public.search_foods('e') limit 1) is null, 'short queries return nothing');
+select pg_temp.denied($$insert into public.foods (source, source_id, kind, name) values ('usda_fdc', 'x', 'generic', 'x')$$, 'signed-out users cannot add foods');
+select pg_temp.denied($$update public.places set name = 'x'$$, 'signed-out users cannot change places');
 do $$ begin
-  begin perform count(*) from public.foods; raise exception 'FAIL: anon read foods';
-  exception when insufficient_privilege then raise notice 'ok: signed-out users cannot read the library';
+  begin perform count(*) from public.memories; raise exception 'FAIL: anon read memories';
+  exception when insufficient_privilege then raise notice 'ok: signed-out users still cannot read private tables';
   end;
 end $$;
 reset role;

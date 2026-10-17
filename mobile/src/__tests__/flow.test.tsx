@@ -3,6 +3,7 @@ import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-li
 import { Alert, Share } from 'react-native';
 
 import * as reviewModule from '../analytics/review';
+import * as libraryClient from '../library/client';
 import { ErrorBoundary } from '../app/_layout';
 import { clock } from '../clock';
 import { CATALOG } from '../engine';
@@ -358,7 +359,7 @@ describe('new screens', () => {
   it('Search lists only ideas that are safe for this user, and opens details', async () => {
     await seed();
     renderRouter(routes, { initialUrl: '/search' });
-    await screen.findByText('Explore ideas');
+    await screen.findByText('Explore');
     for (const m of CATALOG) {
       const unsafe = m.contains.includes('peanut') || m.mayContain.includes('peanut') || m.diet.hasMeat || m.diet.hasFish;
       if (unsafe) expect(screen.queryByLabelText(`${m.name}. Open details.`)).toBeNull();
@@ -750,5 +751,111 @@ describe('retention without pressure', () => {
     renderRouter(routes, { initialUrl: '/' });
     await screen.findByText('What should I eat?');
     expect(screen.queryByText('Share which days you open EatOS?')).toBeNull();
+  });
+});
+
+describe('food & place library', () => {
+  const KEY = 'eatos.state.v1';
+  const seed = (over: object = {}) =>
+    AsyncStorage.setItem(
+      KEY,
+      JSON.stringify({
+        version: 1,
+        profile: { goal: 'eat_better', struggles: [], cuisines: [], allergens: ['peanut'], diets: [], budget: 2, considerations: [], createdAt: new Date().toISOString() },
+        history: [],
+        lastContext: null,
+        analytics: [],
+        setup: { done: true, snoozeUntil: null },
+        ...over,
+      }),
+    );
+  const pb = { id: 1, source: 'usda_fdc' as const, name: 'Peanut butter, creamy', brand: null, allergens: [], allergensKnown: false, mayContain: [], nutrients: { energy_kcal: 589.38, protein_g: 22.5, iron_mg: 1.7 }, verified: true };
+  const cakes = { id: 2, source: 'open_food_facts' as const, name: 'Plain Rice Cakes', brand: 'Puffy', allergens: [], allergensKnown: false, mayContain: [], nutrients: {}, verified: false };
+  let configured: jest.SpyInstance;
+  beforeEach(() => {
+    configured = jest.spyOn(libraryClient, 'libraryConfigured').mockReturnValue(true);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  const openSection = async (label: string) => {
+    renderRouter(routes, { initialUrl: '/search' });
+    fireEvent.press(await screen.findByLabelText(label));
+  };
+
+  it('food search warns a peanut-allergic user about peanut butter even though USDA records no allergens', async () => {
+    const search = jest.spyOn(libraryClient, 'searchFoods').mockResolvedValue([pb, cakes]);
+    await seed();
+    await openSection('Foods');
+    fireEvent.changeText(screen.getByLabelText('Search foods'), 'peanut');
+    jest.advanceTimersByTime(400);
+    await screen.findByText('Peanut butter, creamy');
+    expect(search).toHaveBeenCalledWith('peanut');
+    expect(screen.getByText(/Likely contains peanut \(from its name\)/)).toBeTruthy();
+    expect(screen.getByText(/Allergens not recorded/)).toBeTruthy(); // rice cakes: unknown, never "safe"
+    expect(screen.queryByText(/safe/i)).toBeNull();
+    fireEvent.press(screen.getByLabelText(/^Peanut butter, creamy\. Show details/));
+    expect(await screen.findByText('589 kcal')).toBeTruthy();
+    expect(screen.getByText('Iron')).toBeTruthy();
+  });
+
+  it('hides nutrition numbers for people who asked for no diet talk', async () => {
+    jest.spyOn(libraryClient, 'searchFoods').mockResolvedValue([pb]);
+    await seed({ profile: { goal: 'eat_better', struggles: [], cuisines: [], allergens: [], diets: [], budget: 2, considerations: ['ed_sensitive'], createdAt: new Date().toISOString() } });
+    await openSection('Foods');
+    fireEvent.changeText(screen.getByLabelText('Search foods'), 'peanut');
+    jest.advanceTimersByTime(400);
+    fireEvent.press(await screen.findByLabelText(/^Peanut butter, creamy\. Show details/));
+    await screen.findByText(/Nutrition numbers are hidden/);
+    expect(screen.queryByText(/kcal/)).toBeNull();
+  });
+
+  it('a failed search says so instead of showing nothing', async () => {
+    jest.spyOn(libraryClient, 'searchFoods').mockRejectedValue(new Error('offline'));
+    await seed();
+    await openSection('Foods');
+    fireEvent.changeText(screen.getByLabelText('Search foods'), 'oats');
+    jest.advanceTimersByTime(400);
+    await screen.findByText(/Couldn’t reach the food library/);
+  });
+
+  it('nearby: asks for location only on tap, lists places with distance, and remembers my grocery store', async () => {
+    const Location = jest.requireMock('expo-location');
+    Location.requestForegroundPermissionsAsync.mockClear();
+    const near = jest.spyOn(libraryClient, 'placesNear').mockResolvedValue([
+      { id: 10, kind: 'grocery', name: "Cosentino's Downtown Market", cuisines: [], lat: 39.1033, lon: -94.5786, street: '13th St' },
+      { id: 11, kind: 'restaurant', name: "Joe's Tacos", cuisines: ['mexican'], lat: 39.11, lon: -94.58, street: null },
+    ]);
+    await seed();
+    await openSection('Near me');
+    expect(Location.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByLabelText('Find places near me'));
+    await screen.findByText("Cosentino's Downtown Market");
+    expect(near).toHaveBeenCalledWith(39.0997, -94.5786, null);
+    expect(screen.getByText(/Restaurant · mexican/)).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Make Cosentino's Downtown Market my grocery store"));
+    await screen.findByText("My grocery store: Cosentino's Downtown Market");
+    const stored = JSON.parse((await AsyncStorage.getItem(KEY))!);
+    expect(stored.groceryStore).toEqual({ id: 10, name: "Cosentino's Downtown Market" });
+    expect(JSON.stringify(stored)).not.toContain('39.0997'); // location is never saved
+    fireEvent.press(screen.getByLabelText('Grocery'));
+    await waitFor(() => expect(near).toHaveBeenLastCalledWith(39.0997, -94.5786, 'grocery'));
+  });
+
+  it('location denied: explains, no crash', async () => {
+    const Location = jest.requireMock('expo-location');
+    Location.requestForegroundPermissionsAsync.mockResolvedValueOnce({ granted: false });
+    await seed();
+    await openSection('Near me');
+    fireEvent.press(screen.getByLabelText('Find places near me'));
+    await screen.findByText(/Location is off for EatOS/);
+  });
+
+  it('without a server, the library says it isn’t connected and meal ideas still work', async () => {
+    configured.mockReturnValue(false);
+    await seed();
+    await openSection('Foods');
+    await screen.findByText(/food library isn’t connected/);
+    fireEvent.press(screen.getByLabelText('Meal ideas'));
+    await screen.findByLabelText('Search meal ideas');
   });
 });
