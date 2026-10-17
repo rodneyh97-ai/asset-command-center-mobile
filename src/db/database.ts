@@ -14,6 +14,8 @@ import {
   CoachObservation,
   Drill,
   ImprovementSnapshot,
+  Tournament,
+  TournamentMatch,
 } from '@/domain/types';
 
 interface VolleyballDB extends DBSchema {
@@ -59,6 +61,16 @@ interface VolleyballDB extends DBSchema {
     value: ImprovementSnapshot & { id: string; teamId: string };
     indexes: { 'by-player': string; 'by-team': string };
   };
+  tournaments: {
+    key: string;
+    value: Tournament;
+    indexes: { 'by-team': string };
+  };
+  tournamentMatches: {
+    key: string;
+    value: TournamentMatch;
+    indexes: { 'by-tournament': string };
+  };
 }
 
 let dbInstance: IDBPDatabase<VolleyballDB> | null = null;
@@ -66,7 +78,7 @@ let dbInstance: IDBPDatabase<VolleyballDB> | null = null;
 export async function getDB(): Promise<IDBPDatabase<VolleyballDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<VolleyballDB>('volleyball-rotation-app', 2, {
+  dbInstance = await openDB<VolleyballDB>('volleyball-rotation-app', 3, {
     upgrade(db, oldVersion) {
       if (oldVersion < 1) {
         db.createObjectStore('clubs', { keyPath: 'id' });
@@ -115,6 +127,14 @@ export async function getDB(): Promise<IDBPDatabase<VolleyballDB>> {
         const snapshotStore = db.createObjectStore('improvementSnapshots', { keyPath: 'id' });
         snapshotStore.createIndex('by-player', 'playerId');
         snapshotStore.createIndex('by-team', 'teamId');
+      }
+
+      if (oldVersion < 3) {
+        const tournamentStore = db.createObjectStore('tournaments', { keyPath: 'id' });
+        tournamentStore.createIndex('by-team', 'teamId');
+
+        const tournamentMatchStore = db.createObjectStore('tournamentMatches', { keyPath: 'id' });
+        tournamentMatchStore.createIndex('by-tournament', 'tournamentId');
       }
     },
   });
@@ -382,5 +402,43 @@ export const improvementSnapshotRepo = {
   async put(snapshot: ImprovementSnapshot & { id: string; teamId: string }): Promise<void> {
     const db = await getDB();
     await db.put('improvementSnapshots', snapshot);
+  },
+};
+
+export const tournamentRepo = {
+  async getByTeam(teamId: string): Promise<Tournament[]> {
+    const db = await getDB();
+    return db.getAllFromIndex('tournaments', 'by-team', teamId);
+  },
+  async get(id: string): Promise<Tournament | undefined> {
+    const db = await getDB();
+    return db.get('tournaments', id);
+  },
+  async put(tournament: Tournament): Promise<void> {
+    const db = await getDB();
+    await db.put('tournaments', tournament);
+  },
+  async delete(id: string): Promise<void> {
+    const db = await getDB();
+    await db.delete('tournaments', id);
+  },
+};
+
+export const tournamentMatchRepo = {
+  async getByTournament(tournamentId: string): Promise<TournamentMatch[]> {
+    const db = await getDB();
+    return db.getAllFromIndex('tournamentMatches', 'by-tournament', tournamentId);
+  },
+  async get(id: string): Promise<TournamentMatch | undefined> {
+    const db = await getDB();
+    return db.get('tournamentMatches', id);
+  },
+  async put(match: TournamentMatch): Promise<void> {
+    const db = await getDB();
+    await db.put('tournamentMatches', match);
+  },
+  async delete(id: string): Promise<void> {
+    const db = await getDB();
+    await db.delete('tournamentMatches', id);
   },
 };

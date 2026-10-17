@@ -375,3 +375,66 @@ export interface ImprovementSnapshot {
   date: string;
   source: EvidenceSource;
 }
+
+// ── Tournament Intelligence Module ──
+
+export type TournamentFormat = 'pool-play' | 'bracket' | 'pool-to-bracket';
+
+export type TournamentStatus = 'upcoming' | 'in-progress' | 'completed';
+
+export interface Tournament {
+  id: string;
+  teamId: string;
+  name: string;
+  location: string;
+  startDate: string;
+  endDate: string;
+  format: TournamentFormat;
+  status: TournamentStatus;
+  poolName?: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TournamentMatch {
+  id: string;
+  tournamentId: string;
+  matchId?: string;
+  opponentName: string;
+  scheduledTime?: string;
+  courtNumber?: string;
+  phase: 'pool' | 'bracket';
+  bracketRound?: string;
+  setsWon: number;
+  setsLost: number;
+  result: 'win' | 'loss' | 'pending';
+  notes: string;
+}
+
+export interface TournamentStandings {
+  teamName: string;
+  isUs: boolean;
+  wins: number;
+  losses: number;
+  setsWon: number;
+  setsLost: number;
+  pointsFor: number;
+  pointsAgainst: number;
+}
+
+export interface CrossMatchStats {
+  playerId: string;
+  matchCount: number;
+  totalKills: number;
+  totalAttackErrors: number;
+  totalAces: number;
+  totalServiceErrors: number;
+  totalDigs: number;
+  totalBlocks: number;
+  totalAssists: number;
+  totalReceptionErrors: number;
+  totalBallHandlingErrors: number;
+  totalPointsOnCourt: number;
+  totalPointsAgainstOnCourt: number;
+}
