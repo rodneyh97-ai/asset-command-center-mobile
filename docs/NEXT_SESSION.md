@@ -4,7 +4,7 @@ Branch: `claude/eatos-redesign-wip` (fast-forward into `claude/eatos-mvp` when v
 
 ## State (2026-10-17)
 - Founder has a Supabase org "Harris Tech" (free plan) with one project, which is EatOS. It may be empty or may already have tables: check before running anything.
-- Network allowlist (Custom): fdc.nal.usda.gov, api.nal.usda.gov, world.openfoodfacts.org, static.openfoodfacts.org, overpass-api.de, *.supabase.co, plus package managers. Founder is adding `api.supabase.com` and env var `SUPABASE_ACCESS_TOKEN` (personal access token). Never ask for tokens or passwords in chat.
+- Network allowlist (Custom): fdc.nal.usda.gov, api.nal.usda.gov, world.openfoodfacts.org, static.openfoodfacts.org, overpass-api.de, *.supabase.co, plus package managers. Founder is adding `api.supabase.com` and env vars `SUPABASE_ACCESS_TOKEN` (scoped token, EatOS project only, 7 days: Project Settings read, Advisors read, Database read-write, Migrations read-write; it can NOT read API keys) and `EXPO_PUBLIC_SUPABASE_ANON_KEY` (public anon key). Get the project URL via the API (`/v1/projects/{ref}` or the `get_project_url` capability). Never ask for tokens or passwords in chat.
 - Direct Postgres (port 5432/6543) probably can't pass the HTTPS proxy, so use the Management API: `POST https://api.supabase.com/v1/projects/{ref}/database/query` with `Authorization: Bearer $SUPABASE_ACCESS_TOKEN`, body `{"query": "..."}`.
 
 ## Steps
@@ -16,7 +16,7 @@ Branch: `claude/eatos-redesign-wip` (fast-forward into `claude/eatos-mvp` when v
    - OSM places: needs the founder's launch city (ask). Edit the bounding box in `tools/library/overpass.ql`.
 4. Load in batches through the Management API: insert into `public.foods` / `public.places` with `on conflict (source, source_id) do update` (same columns as `tools/library/load.sql`). Keep each request a few MB. Verify row counts afterwards.
 5. Free plan database limit is 500 MB. Load only the 175,096 products that have nutrition, label allergens or "may contain" (~88 MB of rows before indexes); the other ~680k are just a name and barcode. Check `select pg_size_pretty(pg_database_size(current_database()))` after loading and tell the founder.
-6. Put the project URL and anon key in `mobile/.env` as `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` (anon key is public by design; never the service_role key). Make sure `.env` is gitignored and tell the founder.
+6. After migrations, run the advisors (`GET /v1/projects/{ref}/advisors/security`) and fix anything they flag. Then put the project URL and the anon key (from `$EXPO_PUBLIC_SUPABASE_ANON_KEY`) in `mobile/.env` as `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` (anon key is public by design; never the service_role key). Make sure `.env` is gitignored and tell the founder.
 
 ## Still waiting on the founder
 - Launch city (for restaurants and grocery stores).
