@@ -3,9 +3,12 @@
 // claims a place has this exact dish on its menu.
 import { Linking, Pressable, ScrollView, TextInput, View } from 'react-native';
 
+import { clock } from '../clock';
 import type { MealIdea, Recommendation, Setting } from '../engine';
 import { libraryConfigured, milesBetween, type Place } from '../library/client';
-import { placeCuisines } from '../library/personalize';
+import { placeCuisines, rankPlaces, tasteFor } from '../library/personalize';
+import { useStore } from '../store/AppProvider';
+import { eatingWithNames } from '../store/state';
 import { Body, Button, Heading, Icon, Small } from './components';
 import { CUISINES } from './labels';
 import { PlacesMap } from './PlacesMap';
@@ -14,6 +17,16 @@ import { directionsUrl, usePlaceSearch } from './usePlaceSearch';
 
 const KIND_LABEL: Record<Place['kind'], string> = { restaurant: 'Restaurant', fast_food: 'Fast food', cafe: 'Café', grocery: 'Grocery store', convenience: 'Convenience store' };
 const SHOWN = 12;
+
+/** A rough drive estimate from straight-line distance (no traffic data): roads ~1.3x longer, ~25 mph in town. */
+export function driveMinutes(miles: number): number {
+  return Math.max(2, Math.round(((miles * 1.3) / 25) * 60));
+}
+export function distanceLabel(miles: number): string {
+  const mi = miles < 0.1 ? '<0.1' : miles.toFixed(1);
+  if (miles < 0.4) return `${mi} mi · about ${Math.max(1, Math.round((miles * 1.3 * 60) / 3))} min walk`;
+  return `${mi} mi · about ${driveMinutes(miles)} min drive`;
+}
 
 export function NearbyForMeal({
   meal,
@@ -28,19 +41,22 @@ export function NearbyForMeal({
   onChoose?: (r: Recommendation) => void;
 }) {
   const c = useColors();
+  const { state } = useStore();
   const search = usePlaceSearch();
   const { here, hereLabel, where, setWhere, places, status } = search;
   if (!libraryConfigured()) return null;
 
   // Eating out: restaurants, fast food and cafés. On the go: anywhere that sells food.
   const fits = (p: Place) => setting === 'on_the_go' || (p.kind !== 'grocery' && p.kind !== 'convenience');
+  // Places serving this kind of food first; within that, what you (and whoever you're eating
+  // with) like, then distance. Places with a food someone avoids go last.
   const ranked = here
-    ? (places ?? [])
-        .filter(fits)
-        .map((p) => ({ p, miles: milesBetween(here.lat, here.lon, p.lat, p.lon), match: placeCuisines(p).includes(meal.cuisine) }))
-        .sort((a, b) => Number(b.match) - Number(a.match) || a.miles - b.miles)
+    ? rankPlaces((places ?? []).filter(fits), (p) => milesBetween(here.lat, here.lon, p.lat, p.lon), tasteFor(state, clock.now()), null)
+        .map((r) => ({ p: r.item, reason: r.reason, disliked: r.disliked, miles: milesBetween(here.lat, here.lon, r.item.lat, r.item.lon), match: placeCuisines(r.item).includes(meal.cuisine) }))
+        .sort((a, b) => Number(a.disliked) - Number(b.disliked) || Number(b.match) - Number(a.match))
         .slice(0, SHOWN)
     : [];
+  const together = eatingWithNames(state);
   const food = CUISINES.find((x) => x.value === meal.cuisine)?.label;
   const ideasFor = (p: Place) => {
     const kinds = placeCuisines(p);
@@ -51,6 +67,7 @@ export function NearbyForMeal({
   return (
     <View style={{ gap: space.sm }}>
       <Heading>Places near you</Heading>
+      {together.length ? <Small>Picked for you and {together.join(' and ')}: safe for everyone, matched to what you all like.</Small> : null}
       {!here ? (
         <>
           <Small>See where to get something like this. Your location is only used for this search and isn’t saved.</Small>
@@ -97,7 +114,7 @@ export function NearbyForMeal({
           </Small>
           <PlacesMap here={here} places={ranked.map((r) => r.p)} height={180} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm, paddingRight: space.md }}>
-            {ranked.map(({ p, miles, match }) => (
+            {ranked.map(({ p, miles, match, reason }) => (
               <View key={p.id} style={{ width: 220, gap: space.xs, padding: space.md, borderRadius: 16, borderWidth: 1, borderColor: match ? c.primary : c.border, backgroundColor: c.surface }}>
                 <Body style={{ fontWeight: '600' }}>
                   {p.name}
@@ -106,9 +123,8 @@ export function NearbyForMeal({
                   {KIND_LABEL[p.kind]}
                   {p.cuisines.length ? ` · ${p.cuisines.slice(0, 2).map((x) => x.replace(/_/g, ' ')).join(', ')}` : ''}
                 </Small>
-                <Small muted={false}>
-                  {miles < 0.1 ? '<0.1' : miles.toFixed(1)} mi{match && food ? ` · ${food}` : ''}
-                </Small>
+                <Small muted={false}>{distanceLabel(miles)}</Small>
+                {match && food ? <Small muted={false}>Serves {food}</Small> : reason ? <Small muted={false}>{reason}</Small> : null}
                 {ideasFor(p).length ? (
                   <View style={{ gap: 2 }}>
                     <Small>Ideas here (dishes most {foodName(ideasFor(p)[0].meal.cuisine)} spots have):</Small>

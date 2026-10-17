@@ -920,6 +920,26 @@ describe('food & place library', () => {
       }),
     );
 
+  it('home meals link to cooking videos (a search, never one chosen video); eating out does not', async () => {
+    const open = jest.spyOn(require('react-native').Linking, 'openURL').mockResolvedValue(true);
+    await seedAt('home');
+    renderRouter(routes, { initialUrl: '/meal/chicken-broccoli-pasta' });
+    fireEvent.press(await screen.findByLabelText('Watch videos on how to make Chicken and broccoli pasta'));
+    expect(open).toHaveBeenCalledWith('https://www.youtube.com/results?search_query=how%20to%20make%20chicken%20and%20broccoli%20pasta%20easy');
+    screen.unmount();
+    renderRouter(routes, { initialUrl: '/meal/burrito-bowl?setting=takeout' });
+    await screen.findByText('How to get it');
+    expect(screen.queryByText('Watch how to make it')).toBeNull();
+  });
+
+  it('drive estimates are rough and never below 2 minutes', () => {
+    const { driveMinutes, distanceLabel } = require('../ui/NearbyForMeal');
+    expect(driveMinutes(0.5)).toBe(2);
+    expect(driveMinutes(5)).toBe(16);
+    expect(distanceLabel(0.2)).toMatch(/min walk/);
+    expect(distanceLabel(3)).toBe('3.0 mi · about 9 min drive');
+  });
+
   it('recommendation: a long list of safe options to scroll, 10 more at a time', async () => {
     await seedAt('takeout', ['dairy']);
     renderRouter(routes, { initialUrl: '/decide' });
@@ -955,6 +975,8 @@ describe('food & place library', () => {
     expect(taco.length).toBeGreaterThan(0);
     for (const t of taco) expect(CATALOG.find((m) => `Choose ${m.name} at Far Taqueria` === t.props.accessibilityLabel)?.cuisine).toBe('mexican');
     expect(screen.getAllByText(/dishes most Mexican spots have/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/min walk/)).toBeTruthy(); // Near Diner is a few steps away
+    expect(screen.getByText(/mi · about \d+ min drive/)).toBeTruthy(); // Far Taqueria is a drive
     expect(screen.getByText(/OpenStreetMap contributors/)).toBeTruthy();
     screen.unmount();
     await seedAt('home');
