@@ -7,6 +7,7 @@ import { useAppStore } from '@/stores/app-store';
 import { Player, PlayerRole, AvailabilityStatus } from '@/domain/types';
 import { exportPlayersToCSV, importPlayersFromCSV, downloadCSV } from '@/lib/csv';
 import { playerRepo } from '@/db/database';
+import PlayerProfile from '@/components/player/PlayerProfile';
 
 const ROLES: PlayerRole[] = [
   'Setter',
@@ -38,7 +39,9 @@ function RosterContent() {
   const teamId = searchParams.get('teamId') || '';
   const {
     players,
+    matches,
     loadPlayersForTeam,
+    loadMatchesForTeam,
     createPlayer,
     updatePlayer,
     deletePlayer,
@@ -47,6 +50,7 @@ function RosterContent() {
 
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  const [viewingPlayer, setViewingPlayer] = useState<Player | null>(null);
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -60,8 +64,9 @@ function RosterContent() {
     if (teamId) {
       setActiveTeam(teamId);
       loadPlayersForTeam(teamId);
+      loadMatchesForTeam(teamId);
     }
-  }, [teamId, setActiveTeam, loadPlayersForTeam]);
+  }, [teamId, setActiveTeam, loadPlayersForTeam, loadMatchesForTeam]);
 
   const handleAdd = async () => {
     if (!form.firstName.trim() || !teamId) return;
@@ -136,6 +141,16 @@ function RosterContent() {
     );
   }
 
+  if (viewingPlayer) {
+    return (
+      <PlayerProfile
+        player={viewingPlayer}
+        matchIds={matches.map((m) => m.id)}
+        onBack={() => setViewingPlayer(null)}
+      />
+    );
+  }
+
   return (
     <main className="flex flex-col p-6 max-w-4xl mx-auto w-full">
       <Link href="/" className="text-blue-400 hover:text-blue-300 mb-4 text-sm">
@@ -196,17 +211,20 @@ function RosterContent() {
                 key={player.id}
                 className="bg-slate-800 rounded-xl p-4 flex items-center justify-between"
               >
-                <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setViewingPlayer(player)}
+                  className="flex items-center gap-4 text-left touch-manipulation"
+                >
                   <div className="bg-slate-700 rounded-lg w-12 h-12 flex items-center justify-center text-lg font-bold">
                     {player.jerseyNumber}
                   </div>
                   <div>
-                    <div className="font-medium">
+                    <div className="font-medium text-blue-400 hover:text-blue-300">
                       {player.firstName} {player.lastName}
                     </div>
                     <div className="text-sm text-slate-400">{player.primaryRole}</div>
                   </div>
-                </div>
+                </button>
                 <div className="flex items-center gap-2">
                   <span
                     className={`text-xs px-2 py-1 rounded-full ${

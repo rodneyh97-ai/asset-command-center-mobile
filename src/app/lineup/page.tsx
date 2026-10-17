@@ -1,11 +1,14 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAppStore } from '@/stores/app-store';
-import { Player, RotationPosition, SystemType } from '@/domain/types';
+import { Player, PlayerMatchStats, RotationPosition, SystemType, MatchState } from '@/domain/types';
 import VolleyballCourt from '@/components/court/VolleyballCourt';
+import { suggestLineups, type LineupSuggestion } from '@/domain/lineup-suggestion';
+import { matchEventRepo } from '@/db/database';
+import { rebuildState } from '@/domain/event-sourcing';
 
 const SYSTEMS: SystemType[] = ['5-1', '6-2', '4-2', 'Custom', 'Blank'];
 
@@ -22,8 +25,10 @@ function LineupContent() {
   const teamId = searchParams.get('teamId') || '';
   const {
     players,
+    matches,
     lineups,
     loadPlayersForTeam,
+    loadMatchesForTeam,
     loadLineupsForTeam,
     createLineup,
     updateLineup,
@@ -32,19 +37,57 @@ function LineupContent() {
   } = useAppStore();
 
   const [showBuilder, setShowBuilder] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [lineupName, setLineupName] = useState('');
   const [systemType, setSystemType] = useState<SystemType>('5-1');
   const [positions, setPositions] = useState<RotationPosition[]>([]);
   const [selectedLiberos, setSelectedLiberos] = useState<string[]>([]);
   const [editingLineupId, setEditingLineupId] = useState<string | null>(null);
+  const [allStats, setAllStats] = useState<PlayerMatchStats[]>([]);
+  const [suggestions, setSuggestions] = useState<LineupSuggestion[]>([]);
 
   useEffect(() => {
     if (teamId) {
       setActiveTeam(teamId);
       loadPlayersForTeam(teamId);
+      loadMatchesForTeam(teamId);
       loadLineupsForTeam(teamId);
     }
-  }, [teamId, setActiveTeam, loadPlayersForTeam, loadLineupsForTeam]);
+  }, [teamId, setActiveTeam, loadPlayersForTeam, loadMatchesForTeam, loadLineupsForTeam]);
+
+  useEffect(() => {
+    async function loadStats() {
+      const stats: PlayerMatchStats[] = [];
+      for (const m of matches) {
+        const events = await matchEventRepo.getByMatch(m.id);
+        if (events.length === 0) continue;
+        const state = rebuildState(events);
+        if (!state) continue;
+        for (const setState of state.sets) {
+          for (const ps of Object.values(setState.playerStats)) {
+            stats.push(ps);
+          }
+        }
+      }
+      setAllStats(stats);
+    }
+    if (matches.length > 0) loadStats();
+  }, [matches]);
+
+  const handleShowSuggestions = () => {
+    const results = suggestLineups(players, allStats, lineups, systemType);
+    setSuggestions(results);
+    setShowSuggestions(true);
+  };
+
+  const handleApplySuggestion = (suggestion: LineupSuggestion) => {
+    setPositions(suggestion.positions);
+    setSelectedLiberos(suggestion.liberoIds);
+    setSystemType(suggestion.systemType);
+    setShowSuggestions(false);
+    setShowBuilder(true);
+    if (!lineupName) setLineupName(`Suggested ${suggestion.systemType}`);
+  };
 
   const availablePlayers = players.filter(
     (p) => !positions.some((pos) => pos.playerId === p.id)
@@ -153,13 +196,79 @@ function LineupContent() {
 
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Lineups</h1>
-        <button
-          onClick={() => { resetBuilder(); setShowBuilder(true); }}
-          className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-medium"
-        >
-          + New Lineup
-        </button>
+        <div className="flex gap-2">
+          {players.length >= 6 && (
+            <button
+              onClick={handleShowSuggestions}
+              className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg font-medium text-sm"
+            >
+              Smart Suggest
+            </button>
+          )}
+          <button
+            onClick={() => { resetBuilder(); setShowBuilder(true); }}
+            className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-medium"
+          >
+            + New Lineup
+          </button>
+        </div>
       </div>
+
+      {/* Smart Suggestions */}
+      {showSuggestions && (
+        <div className="mb-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Suggested Lineups</h2>
+            <button onClick={() => setShowSuggestions(false)} className="text-slate-400 hover:text-white text-sm">
+              Dismiss
+            </button>
+          </div>
+          {suggestions.length === 0 ? (
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-center">
+              <p className="text-slate-400 text-sm">Not enough players or role coverage for suggestions.</p>
+            </div>
+          ) : (
+            suggestions.map((s, i) => (
+              <div key={i} className="bg-slate-800 rounded-xl border border-slate-700/50 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium">{s.reasoning[0]}</div>
+                  <button
+                    onClick={() => handleApplySuggestion(s)}
+                    className="bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg text-sm font-medium"
+                  >
+                    Use This
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {s.positions.map((p) => {
+                    const player = players.find((pl) => pl.id === p.playerId);
+                    return (
+                      <span key={p.position} className="text-xs bg-slate-700 px-2 py-1 rounded-lg">
+                        P{p.position}: #{player?.jerseyNumber} {player?.displayName}
+                      </span>
+                    );
+                  })}
+                  {s.liberoIds.length > 0 && s.liberoIds.map((lid) => {
+                    const p = players.find((pl) => pl.id === lid);
+                    return (
+                      <span key={lid} className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-lg">
+                        L: #{p?.jerseyNumber} {p?.displayName}
+                      </span>
+                    );
+                  })}
+                </div>
+                {s.reasoning.slice(1).length > 0 && (
+                  <div className="text-xs text-slate-400 space-y-0.5">
+                    {s.reasoning.slice(1).map((r, j) => (
+                      <div key={j}>{r}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Saved Lineups */}
       {!showBuilder && (
