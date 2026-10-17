@@ -8,6 +8,7 @@ import { clock } from '../clock';
 import { CATALOG, type MealIdea, type Recommendation, type Setting } from '../engine';
 import { libraryConfigured, milesBetween, newOnMap, type Place } from '../library/client';
 import { placeCuisines, rankPlaces, tasteFor } from '../library/personalize';
+import { ideasForRow } from '../library/placeIdeas';
 import { useStore } from '../store/AppProvider';
 import { eatingWithNames } from '../store/state';
 import { Body, Button, Heading, Icon, Small, Tag } from './components';
@@ -26,7 +27,6 @@ export function driveMinutes(miles: number): number {
 export function distanceLabel(miles: number): string {
   return `${miles < 0.1 ? '<0.1' : miles.toFixed(1)} mi · about ${driveMinutes(miles)} min drive`;
 }
-const IDEAS_PER_PLACE = 8;
 const DAY = 86400000;
 
 export function NearbyForMeal({
@@ -80,11 +80,10 @@ export function NearbyForMeal({
   const together = eatingWithNames(state);
   const food = CUISINES.find((x) => x.value === meal.cuisine)?.label;
   // The user's own safe options that this kind of place usually has, best match first.
-  const ideasFor = (p: Place) => {
-    const kinds = placeCuisines(p);
-    return ideas.filter((r) => kinds.includes(r.meal.cuisine)).slice(0, IDEAS_PER_PLACE);
-  };
-  const foodName = (v: string) => CUISINES.find((x) => x.value === v)?.label ?? v;
+  // Each card: dishes that kind of place usually has (library/placeIdeas.ts), varied along the row.
+  const row = ideasForRow(ranked.map((r) => r.p), ideas);
+  const ideasFor = (p: Place) => row[ranked.findIndex((r) => r.p.id === p.id)]?.ideas ?? [];
+  const labelFor = (p: Place) => row[ranked.findIndex((r) => r.p.id === p.id)]?.label ?? 'places like this';
 
   return (
     <View style={{ gap: space.sm }}>
@@ -167,7 +166,7 @@ export function NearbyForMeal({
                 ) : null}
                 {ideasFor(p).length ? (
                   <View style={{ gap: 4 }}>
-                    <Small>What you might get (dishes most {foodName(ideasFor(p)[0].meal.cuisine)} spots have):</Small>
+                    <Small>What you might get (dishes most {labelFor(p)} have):</Small>
                     {ideasFor(p).map((r, i) => (
                       <Pressable key={r.meal.id} accessibilityRole="button" accessibilityLabel={`Choose ${r.meal.name} at ${p.name}`} onPress={() => onChoose?.(r)} hitSlop={4}>
                         <Small muted={false} style={{ color: c.primary, fontWeight: '600' }}>

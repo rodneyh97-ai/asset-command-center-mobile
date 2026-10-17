@@ -133,6 +133,11 @@ export const MEAL_INGREDIENTS: Record<string, Ingredient[]> = {
   'banh-mi': ['bread', 'chicken', 'pork', 'cilantro', 'spicy', 'mayo', 'cucumber'],
   'vermicelli-bowl': ['noodles', 'chicken', 'greens', 'cucumber', 'nuts'],
   'pho-chicken': ['noodles', 'chicken', 'cilantro'],
+  'bbq-burnt-ends-plate': ['beef', 'beans', 'greens', 'mayo'],
+  'bbq-pulled-pork-sandwich': ['pork', 'bread', 'greens'],
+  'bbq-smoked-chicken-plate': ['chicken', 'beans', 'greens'],
+  'wings-and-veggies': ['chicken', 'greens', 'spicy'],
+  'pancakes-and-eggs': ['eggs', 'fruit', 'milk'],
 };
 
 export function ingredientsOf(mealId: string): Ingredient[] {

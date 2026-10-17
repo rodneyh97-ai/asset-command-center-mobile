@@ -979,7 +979,8 @@ describe('food & place library', () => {
     // Each place suggests the user's own safe ideas that match its food (never claims a menu).
     const taco = screen.getAllByLabelText(/ at Far Taqueria$/);
     expect(taco.length).toBeGreaterThan(0);
-    for (const t of taco) expect(CATALOG.find((m) => `Choose ${m.name} at Far Taqueria` === t.props.accessibilityLabel)?.cuisine).toBe('mexican');
+    // Mexican dishes first; general sit-down dishes may follow.
+    expect(CATALOG.find((m) => `Choose ${m.name} at Far Taqueria` === taco[0].props.accessibilityLabel)?.cuisine).toBe('mexican');
     expect(screen.getAllByText(/dishes most Mexican spots have/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/min walk/)).toBeNull(); // always a drive estimate
     expect(screen.getAllByText(/mi · about \d+ min drive/).length).toBe(4);

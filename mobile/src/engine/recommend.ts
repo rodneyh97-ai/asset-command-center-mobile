@@ -16,6 +16,8 @@ import type {
 } from './types';
 
 const MORE_OPTIONS = 60;
+/** General-virtue points beyond this count half (see scoreMeal). */
+const GENERAL_CAP = 4;
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
@@ -184,8 +186,13 @@ function scoreMeal(
   const reasons: ScoredReason[] = [];
   const add = (weight: number, text: string) => reasons.push({ weight, text });
   const gentle = profile.considerations.includes('ed_sensitive');
+  // General virtues (goal fit, low cost, fits your struggles) are tracked so they can have
+  // diminishing returns: otherwise one cheap, healthy, comforting meal wins for everyone.
+  const general: [number, number][] = [];
+  const mark = () => reasons.length;
 
   // Goal fit
+  let from = mark();
   switch (profile.goal) {
     case 'build_muscle':
       if (meal.highProtein) add(3, 'High in protein for your muscle-building goal');
@@ -208,6 +215,7 @@ function scoreMeal(
       else if (meal.highProtein || meal.highFiber) add(1.5, 'Steadier energy than a quick snack');
       break;
   }
+  general.push([from, mark()]);
 
   // Taste
   if (profile.cuisines.includes(meal.cuisine)) add(2, 'Matches food you enjoy');
@@ -237,16 +245,23 @@ function scoreMeal(
   if (ctx.feeling === 'energized' && meal.highFiber) add(0.5, '');
 
   // Budget
+  from = mark();
   if (meal.budget <= ctx.budget) add(meal.budget < ctx.budget ? 1 : 0.5, meal.budget === 1 ? 'Budget-friendly' : 'Fits your budget');
   else add(-3, '');
 
+  general.push([from, mark()]);
+
   // What makes eating well hard for this user
+  from = mark();
   if (profile.struggles.includes('no_time') && meal.effort === 'none') add(1, '');
   if (profile.struggles.includes('budget') && meal.budget === 1) add(1, '');
   if (profile.struggles.includes('cooking') && meal.effort !== 'medium') add(1, 'No real cooking skills needed');
   if (profile.struggles.includes('cravings') && meal.comfort && (meal.highProtein || meal.highFiber)) {
     add(1, 'Satisfying, so cravings are less likely to win later');
   }
+  general.push([from, mark()]);
+  const generalPoints = general.reduce((sum, [a, b]) => sum + reasons.slice(a, b).reduce((t, r) => t + Math.max(0, r.weight), 0), 0);
+  if (generalPoints > GENERAL_CAP) add(-(generalPoints - GENERAL_CAP) / 2, '');
 
   // Learned from explicit feedback
   const mine = history.filter((e) => e.mealId === meal.id);
@@ -254,11 +269,19 @@ function scoreMeal(
   if (saved) add(2, 'One of your saved meals');
   if (mine.some((e) => e.kind === 'loved')) add(1.5, 'You loved this last time');
   const accepted = mine.filter((e) => e.kind === 'accepted');
-  const familiarity = profile.struggles.includes('decision_fatigue') ? 1.5 : 1;
-  if (accepted.length > 0) add(Math.min(accepted.length, 3) * familiarity, 'You’ve picked this before');
-  if (accepted.some((e) => now.getTime() - Date.parse(e.at) < 20 * HOUR)) add(-5, '');
+  const fatigue = profile.struggles.includes('decision_fatigue');
+  const age = (e: FeedbackEvent) => now.getTime() - Date.parse(e.at);
+  // Old favorites come back; something eaten in the last few days steps aside, more the
+  // more often it was eaten. (Familiar food helps people who find deciding hard, so the
+  // pull-back is softer for them.)
+  const older = accepted.filter((e) => age(e) >= 3 * DAY);
+  const thisWeek = accepted.filter((e) => age(e) < 7 * DAY);
+  if (older.length > 0) add(Math.min(older.length, 3) * (fatigue ? 1.5 : 1), 'You’ve picked this before');
+  if (thisWeek.length > 0) add(-Math.min(9, thisWeek.length * (fatigue ? 2 : 4)), '');
+  if (accepted.some((e) => age(e) < 20 * HOUR)) add(-5, '');
   const recentSwaps = mine.filter((e) => e.kind === 'swapped' && now.getTime() - Date.parse(e.at) < 7 * DAY);
-  if (recentSwaps.length > 0) add(-Math.min(recentSwaps.length, 3), '');
+  // Skipping it ("something else") counts: it steps back for a few days instead of returning tomorrow.
+  if (recentSwaps.length > 0) add(-Math.min(8, recentSwaps.length * 3), '');
 
   // Learned over time from this user's own choices (on-device).
   const learned = tasteScore(meal, taste);
@@ -266,8 +289,22 @@ function scoreMeal(
   const habit = habitBonus(meal, ctx.setting, ctx.mealTime, taste);
   if (habit.points > 0) add(habit.points, habit.reason ?? '');
 
+  // Tie-breaker: a small daily shuffle, different for each person, so near-equal meals
+  // rotate from day to day instead of the same one always winning. Deterministic (testable).
+  // Wider while EatOS knows nothing about someone yet, so it learns their taste faster.
+  const coldStart = taste.evidence < 1;
+  add(variety(meal.id, now, profile.createdAt) * (coldStart ? 2 : 1), '');
+
   const score = reasons.reduce((s, r) => s + r.weight, 0);
   return { score, reasons };
+}
+
+/** 0–1.5, stable for a given meal, person and day. */
+function variety(mealId: string, now: Date, who: string): number {
+  const key = `${mealId}|${now.getFullYear()}-${now.getMonth()}-${now.getDate()}|${who}`;
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 1000) / 667;
 }
 
 export function isSaved(mealId: string, history: FeedbackEvent[]): boolean {
@@ -407,6 +444,14 @@ export function recommend(profile: Profile, ctx: Context, opts: RecommendOptions
       alternatives[1] = { ...fresh, isNew: true, reasons: ['Something new you might like', ...fresh.reasons].slice(0, 3) };
     }
   }
+  // A routine ("your usual for lunch at work") keeps a spot among the alternatives even when
+  // it stepped back from the top pick for being recent, so it is always one tap away.
+  const usual = rest.find((r) => habitBonus(r.meal, ctx.setting, ctx.mealTime, taste).points > 0 && !alternatives.includes(r));
+  if (usual && alternatives.length === 2 && !habitBonus(primary.meal, ctx.setting, ctx.mealTime, taste).points) {
+    const reason = habitBonus(usual.meal, ctx.setting, ctx.mealTime, taste).reason;
+    alternatives[1] = { ...usual, reasons: [...new Set([...(reason ? [reason] : []), ...usual.reasons])].slice(0, 3) };
+  }
+
   // A longer list for someone who just wants to scan and pick: same safety checks, best first,
   // meals that suit this time of day before the rest.
   const shownIds = new Set([primary, ...alternatives].map((r) => r.meal.id));
