@@ -112,6 +112,23 @@ test('OpenStreetMap: kinds, way centers, brand fallback, clean cuisines, skips j
   assert.ok(!rows.some((r) => ['node/4', 'node/5', 'way/6'].includes(r.source_id)));
 });
 
+test('OpenStreetMap: own website and menu links (http/https only, ≤300 chars) and last-edit time', async () => {
+  const out = path.join(tmp, 'osm-links.tsv');
+  await importOsm(fx('overpass.json'), out);
+  const rows = readOut(out, PLACE_COLUMNS);
+  const joe = rows.find((r) => r.source_id === 'node/1');
+  assert.equal(joe.website, 'https://joestacos.example/');
+  assert.equal(joe.menu_url, 'https://joestacos.example/menu.pdf');
+  assert.equal(joe.osm_updated_at, '2026-09-30T12:00:00Z');
+  const hyvee = rows.find((r) => r.source_id === 'way/2');
+  assert.equal(hyvee.website, 'http://www.hy-vee.com', 'javascript: dropped, contact:website used instead');
+  assert.equal(hyvee.menu_url, null);
+  assert.equal(hyvee.osm_updated_at, null, 'bad timestamp dropped');
+  const sb = rows.find((r) => r.source_id === 'node/3');
+  assert.equal(sb.website, null, 'no scheme = not a link');
+  assert.equal(sb.menu_url, null, 'over 300 characters dropped');
+});
+
 test('API loader: COPY rows round-trip to JSON rows; "useful" filter keeps only products with real data', async () => {
   const { toRow, isUseful } = await import('./load-api.mjs');
   const out = path.join(tmp, 'off2.tsv');
@@ -133,4 +150,6 @@ test('API loader: COPY rows round-trip to JSON rows; "useful" filter keeps only 
   const joe = toRow(fs.readFileSync(places, 'utf8').split('\n')[0], 'places');
   assert.deepEqual(joe.cuisines, ['mexican', 'burger']);
   assert.equal(joe.lat, 39.1);
+  assert.equal(joe.menu_url, 'https://joestacos.example/menu.pdf');
+  assert.equal(joe.osm_updated_at, '2026-09-30T12:00:00Z');
 });

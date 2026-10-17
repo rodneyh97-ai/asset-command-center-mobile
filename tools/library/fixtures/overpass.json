@@ -1,7 +1,7 @@
 {"elements":[
- {"type":"node","id":1,"lat":39.10,"lon":-94.58,"tags":{"amenity":"restaurant","name":"Joe's Tacos","cuisine":"mexican;tex-mex; Burger ","addr:street":"Main St","addr:housenumber":"12","addr:city":"Kansas City"}},
- {"type":"way","id":2,"center":{"lat":39.05,"lon":-94.60},"tags":{"shop":"supermarket","name":"Hy-Vee","brand":"Hy-Vee"}},
- {"type":"node","id":3,"lat":39.11,"lon":-94.57,"tags":{"amenity":"cafe","brand":"Starbucks"}},
+ {"type":"node","id":1,"lat":39.10,"lon":-94.58,"timestamp":"2026-09-30T12:00:00Z","version":3,"tags":{"amenity":"restaurant","name":"Joe's Tacos","website":"https://joestacos.example/","menu":"https://joestacos.example/menu.pdf","cuisine":"mexican;tex-mex; Burger ","addr:street":"Main St","addr:housenumber":"12","addr:city":"Kansas City"}},
+ {"type":"way","id":2,"center":{"lat":39.05,"lon":-94.60},"timestamp":"not a date","tags":{"shop":"supermarket","name":"Hy-Vee","brand":"Hy-Vee","website":"javascript:alert(1)","contact:website":"http://www.hy-vee.com"}},
+ {"type":"node","id":3,"lat":39.11,"lon":-94.57,"tags":{"amenity":"cafe","brand":"Starbucks","website":"www.starbucks.com","website:menu":"https://www.starbucks.com/menu/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}},
  {"type":"node","id":4,"lat":39.12,"lon":-94.56,"tags":{"amenity":"bank","name":"A Bank"}},
  {"type":"node","id":5,"lat":39.12,"lon":-94.56,"tags":{"amenity":"restaurant"}},
  {"type":"way","id":6,"tags":{"amenity":"fast_food","name":"No Coords"}},

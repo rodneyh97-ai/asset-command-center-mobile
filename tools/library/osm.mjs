@@ -5,6 +5,12 @@
 import fs from 'node:fs';
 import { PLACE_COLUMNS, clean, writer } from './lib.mjs';
 
+/** A web link from an OSM tag: http(s) only, no spaces, at most 300 characters. */
+export const webUrl = (v) => {
+  const s = (v ?? '').split(';')[0].trim();
+  return s.length <= 300 && /^https?:\/\/[^\s/?#]+\.[^\s]*$/i.test(s) ? s : undefined;
+};
+
 const KIND = { restaurant: 'restaurant', fast_food: 'fast_food', cafe: 'cafe', supermarket: 'grocery', grocery: 'grocery', greengrocer: 'grocery', convenience: 'convenience' };
 
 export async function importOsm(input, outPath) {
@@ -27,6 +33,10 @@ export async function importOsm(input, outPath) {
       lat,
       lon,
       address: Object.fromEntries(['housenumber', 'street', 'city', 'postcode', 'state'].map((k) => [k, t[`addr:${k}`]]).filter(([, v]) => v)),
+      website: webUrl(t.website) ?? webUrl(t['contact:website']),
+      menu_url: webUrl(t.menu) ?? webUrl(t['website:menu']),
+      // When the element was last edited on OSM (any edit), not when the place opened.
+      osm_updated_at: /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(el.timestamp ?? '') ? el.timestamp : undefined,
     });
   }
   return out.close();

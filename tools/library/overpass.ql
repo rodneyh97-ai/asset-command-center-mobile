@@ -7,4 +7,5 @@
   nwr["amenity"~"^(restaurant|fast_food|cafe)$"](38.78,-94.95,39.36,-94.18);
   nwr["shop"~"^(supermarket|grocery|greengrocer|convenience)$"](38.78,-94.95,39.36,-94.18);
 );
-out center tags;
+// meta adds each element's last-edit timestamp and version (stored as osm_updated_at).
+out center meta;

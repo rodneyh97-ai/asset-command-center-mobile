@@ -6,15 +6,15 @@ import { Linking, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { clock } from '../clock';
 import { CATALOG, type MealIdea, type Recommendation, type Setting } from '../engine';
-import { libraryConfigured, milesBetween, type Place } from '../library/client';
+import { libraryConfigured, milesBetween, newOnMap, type Place } from '../library/client';
 import { placeCuisines, rankPlaces, tasteFor } from '../library/personalize';
 import { useStore } from '../store/AppProvider';
 import { eatingWithNames } from '../store/state';
-import { Body, Button, Heading, Icon, Small } from './components';
+import { Body, Button, Heading, Icon, Small, Tag } from './components';
 import { CUISINES } from './labels';
 import { PlacesMap } from './PlacesMap';
 import { radius, space, type, useColors } from './theme';
-import { directionsUrl, menuSearchUrl, usePlaceSearch } from './usePlaceSearch';
+import { directionsUrl, menuLink, NEW_ON_MAP_LABEL, usePlaceSearch } from './usePlaceSearch';
 
 const KIND_LABEL: Record<Place['kind'], string> = { restaurant: 'Restaurant', fast_food: 'Fast food', cafe: 'Café', grocery: 'Grocery store', convenience: 'Convenience store' };
 const SHOWN = 12;
@@ -153,6 +153,11 @@ export function NearbyForMeal({
                   {p.cuisines.length ? ` · ${p.cuisines.slice(0, 2).map((x) => x.replace(/_/g, ' ')).join(', ')}` : ''}
                 </Small>
                 <Small muted={false}>{distanceLabel(miles)}</Small>
+                {newOnMap(p, clock.now()) ? (
+                  <View style={{ alignSelf: 'flex-start' }}>
+                    <Tag label={NEW_ON_MAP_LABEL} />
+                  </View>
+                ) : null}
                 {different && fresh ? (
                   <Small muted={false}>Something different for you</Small>
                 ) : match && food ? (
@@ -177,7 +182,7 @@ export function NearbyForMeal({
                   <Small>No ideas from EatOS for this kind of place yet. Check their menu.</Small>
                 )}
                 <Button label="Directions" variant="secondary" icon="navigate-outline" a11yLabel={`Directions to ${p.name}`} onPress={() => void Linking.openURL(directionsUrl(p)).catch(() => {})} />
-                <Button label="See their menu" variant="ghost" icon="restaurant-outline" a11yLabel={`Look up the menu for ${p.name}`} onPress={() => void Linking.openURL(menuSearchUrl(p)).catch(() => {})} />
+                <Button label={menuLink(p).label} variant="ghost" icon="restaurant-outline" a11yLabel={menuLink(p).a11y} onPress={() => void Linking.openURL(menuLink(p).url).catch(() => {})} />
               </View>
             ))}
           </ScrollView>

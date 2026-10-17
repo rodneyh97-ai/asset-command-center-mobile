@@ -962,9 +962,14 @@ describe('food & place library', () => {
       { id: 20, kind: 'grocery', name: 'Corner Grocery', cuisines: [], lat: 39.1, lon: -94.58, street: null },
       { id: 21, kind: 'restaurant', name: 'Near Diner', cuisines: ['american'], lat: 39.0998, lon: -94.5787, street: null },
       { id: 22, kind: 'restaurant', name: 'Far Taqueria', cuisines: ['mexican'], lat: 39.13, lon: -94.6, street: null },
+      // Two other foods, so one is "different" whatever the pick is.
+      { id: 23, kind: 'restaurant', name: 'Thai Spot', cuisines: ['thai'], lat: 39.14, lon: -94.61, street: null },
+      { id: 24, kind: 'restaurant', name: 'Pasta Place', cuisines: ['italian'], lat: 39.15, lon: -94.62, street: null },
     ]);
+    // Lunchtime, so the pick (and which places count as "different") doesn't depend on when the test runs.
+    clock.set(new Date(2026, 9, 17, 12, 0));
     // I've been eating Mexican lately (for "somewhere different" below).
-    await seedAt('takeout', [], [{ mealId: 'burrito-bowl', kind: 'accepted', at: new Date(Date.now() - 86400000).toISOString() }]);
+    await seedAt('takeout', [], [{ mealId: 'burrito-bowl', kind: 'accepted', at: new Date(clock.now().getTime() - 86400000).toISOString() }]);
     renderRouter(routes, { initialUrl: '/decide' });
     fireEvent.press(await screen.findByText('Show places near me'));
     await screen.findByLabelText('Directions to Near Diner');
@@ -977,14 +982,15 @@ describe('food & place library', () => {
     for (const t of taco) expect(CATALOG.find((m) => `Choose ${m.name} at Far Taqueria` === t.props.accessibilityLabel)?.cuisine).toBe('mexican');
     expect(screen.getAllByText(/dishes most Mexican spots have/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/min walk/)).toBeNull(); // always a drive estimate
-    expect(screen.getAllByText(/mi · about \d+ min drive/).length).toBe(2);
+    expect(screen.getAllByText(/mi · about \d+ min drive/).length).toBe(4);
     expect(screen.getAllByText(/Top pick for you/).length).toBeGreaterThan(0);
     const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
     fireEvent.press(screen.getByLabelText('Look up the menu for Far Taqueria'));
     expect(open).toHaveBeenCalledWith('https://www.google.com/search?q=Far%20Taqueria%20menu');
-    // "Somewhere different": places with food I haven't had lately come first.
+    expect(screen.queryByText('New or updated on the map')).toBeNull(); // no OSM edit date: no chip
+    // "Somewhere different"": places with food I haven't had lately come first.
     fireEvent.press(screen.getByLabelText('Show places with food I haven’t had lately'));
-    await screen.findByText('Something different for you');
+    expect((await screen.findAllByText('Something different for you')).length).toBeGreaterThan(0);
     expect(screen.getByText(/food you haven’t had lately first/)).toBeTruthy();
     expect(screen.getByText(/OpenStreetMap contributors/)).toBeTruthy();
     screen.unmount();
@@ -992,5 +998,41 @@ describe('food & place library', () => {
     renderRouter(routes, { initialUrl: '/decide' });
     await screen.findByText('More options');
     expect(screen.queryByText('Places near you')).toBeNull();
+    clock.set(null);
+  });
+
+  it('recommendation: places open their own menu or website from OpenStreetMap; "new or updated on the map" never says newly opened', async () => {
+    const recent = new Date(Date.now() - 10 * 86400000).toISOString();
+    const old = new Date(Date.now() - 400 * 86400000).toISOString();
+    jest.spyOn(libraryClient, 'placesNear').mockResolvedValue([
+      { id: 31, kind: 'restaurant', name: 'Menu Cafe', cuisines: ['american'], lat: 39.0998, lon: -94.5787, street: null, website: 'https://menucafe.example', menuUrl: 'https://menucafe.example/menu', osmUpdatedAt: recent },
+      { id: 32, kind: 'restaurant', name: 'Site Grill', cuisines: ['american'], lat: 39.1, lon: -94.579, street: null, website: 'http://sitegrill.example', menuUrl: null, osmUpdatedAt: old },
+      { id: 33, kind: 'restaurant', name: 'Sneaky Diner', cuisines: ['american'], lat: 39.1001, lon: -94.5791, street: '1 Main St', website: 'javascript:alert(1)', menuUrl: 'file:///etc/passwd', osmUpdatedAt: null },
+    ]);
+    await seedAt('takeout');
+    renderRouter(routes, { initialUrl: '/decide' });
+    fireEvent.press(await screen.findByText('Show places near me'));
+    await screen.findByLabelText('Directions to Menu Cafe');
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    fireEvent.press(screen.getByLabelText('Open the menu for Menu Cafe'));
+    expect(open).toHaveBeenLastCalledWith('https://menucafe.example/menu');
+    fireEvent.press(screen.getByLabelText('Open the website for Site Grill'));
+    expect(open).toHaveBeenLastCalledWith('http://sitegrill.example');
+    expect(screen.getByText('Their website')).toBeTruthy(); // a website is never called a menu
+    fireEvent.press(screen.getByLabelText('Look up the menu for Sneaky Diner')); // unsafe links fall back to a search
+    expect(open).toHaveBeenLastCalledWith('https://www.google.com/search?q=Sneaky%20Diner%201%20Main%20St%20menu');
+    // Only the recently edited place gets the chip, and nothing claims it just opened.
+    expect(screen.getAllByText('New or updated on the map').length).toBe(1);
+    expect(screen.queryByText(/newly opened|just opened|grand opening/i)).toBeNull();
+    screen.unmount();
+    // Explore → Near me shows the same chip and links.
+    await seed();
+    await openSection('Near me');
+    fireEvent.press(screen.getByLabelText('Find places near me'));
+    await screen.findByText('Menu Cafe');
+    expect(screen.getAllByText('New or updated on the map').length).toBe(1);
+    fireEvent.press(screen.getByLabelText('Open the menu for Menu Cafe'));
+    expect(open).toHaveBeenLastCalledWith('https://menucafe.example/menu');
+    expect(screen.getByLabelText('Open the website for Site Grill')).toBeTruthy();
   });
 });

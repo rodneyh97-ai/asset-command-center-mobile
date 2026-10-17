@@ -59,6 +59,26 @@ select pg_temp.expect((select string_agg(source_id, ',') from public.places_near
 select pg_temp.expect((select count(*) from public.places_near(39.10, -94.58, 100000)) = 3, 'radius is capped at 50 km');
 select pg_temp.expect((select count(*) from public.places_near(39.10, -94.58, -5)) = 1, 'negative radius treated as minimum');
 
+-- Own website / menu links and last OSM edit come back from places_near (0007).
+select pg_temp.expect(coalesce((select menu_url = 'https://joestacos.example/menu.pdf' and website = 'https://joestacos.example/' and osm_updated_at = '2026-09-30T12:00:00Z'
+  from public.places_near(39.10, -94.58, 10) where source_id = 'node/1'), false), 'places_near returns website, menu link and last OSM edit');
+select pg_temp.expect(coalesce((select website = 'http://www.hy-vee.com' and menu_url is null and osm_updated_at is null from public.places_near(39.10, -94.58, 10) where source_id = 'way/2'), false), 'missing links stay empty');
+reset role;
+do $$ begin
+  update public.places set website = 'javascript:alert(1)' where source_id = 'node/1';
+  raise exception 'FAIL: a javascript: link was stored';
+exception when check_violation then raise notice 'ok: only http(s) links can be stored';
+end $$;
+do $$ begin
+  update public.places set menu_url = 'ftp://x.example' where source_id = 'node/1';
+  raise exception 'FAIL: an ftp: menu link was stored';
+exception when check_violation then raise notice 'ok: only http(s) menu links can be stored';
+end $$;
+set role anon;
+select pg_temp.expect((select count(*) from public.places_near(39.10, -94.58, 10) where menu_url is not null) = 1, 'signed-out users get menu links too');
+select pg_temp.denied($$update public.places set menu_url = 'https://evil.example' $$, 'signed-out users cannot change links');
+set role authenticated;
+
 -- Favorites are private.
 insert into public.favorite_places (user_id, place_id, role) select auth.uid(), id, 'my_grocery_store' from public.places where source_id = 'way/2';
 select pg_temp.as_user('dddddddd-0000-0000-0000-000000000004');

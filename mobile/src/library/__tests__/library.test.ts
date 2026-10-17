@@ -1,6 +1,6 @@
 import type { Allergen } from '../../engine';
 import { allergyStatus } from '../allergy';
-import { milesBetween, parseFood, parsePlace, placesNear, searchFoods, type Food } from '../client';
+import { milesBetween, newOnMap, parseFood, parsePlace, placesNear, searchFoods, webLink, type Food } from '../client';
 
 const food = (o: Partial<Food>): Food => ({ id: 1, source: 'usda_fdc', name: 'X', brand: null, allergens: [], allergensKnown: false, mayContain: [], nutrients: {}, verified: true, ...o });
 const ALL: Allergen[] = ['peanut', 'tree_nut', 'dairy', 'egg', 'gluten', 'soy', 'fish', 'shellfish', 'sesame'];
@@ -44,6 +44,27 @@ describe('library client treats server data as untrusted', () => {
     expect(parsePlace({ id: 1, kind: 'casino', name: 'x', lat: 1, lon: 1 })).toBeNull();
     expect(parsePlace({ id: 1, kind: 'cafe', name: 'x', lat: 200, lon: 1 })).toBeNull();
     expect(parsePlace({ id: 1, kind: 'cafe', name: 'Joe', lat: 39, lon: -94, cuisines: ['coffee', '<script>'], address: { housenumber: '12', street: 'Main St' } })).toMatchObject({ street: '12 Main St', cuisines: ['coffee'] });
+    // Own links: http(s) only; the last OSM edit is kept as a time, junk dropped.
+    expect(parsePlace({ id: 2, kind: 'cafe', name: 'Joe', lat: 39, lon: -94, website: 'https://joe.example', menu_url: 'javascript:alert(1)', osm_updated_at: '2026-09-30T12:00:00+00:00' })).toMatchObject({
+      website: 'https://joe.example',
+      menuUrl: null,
+      osmUpdatedAt: '2026-09-30T12:00:00.000Z',
+    });
+    expect(parsePlace({ id: 3, kind: 'cafe', name: 'Joe', lat: 39, lon: -94, website: 'www.joe.example', osm_updated_at: 'yesterday' })).toMatchObject({ website: null, menuUrl: null, osmUpdatedAt: null });
+    expect(webLink('http://a.example/menu')).toBe('http://a.example/menu');
+    expect(webLink('https://a.example/' + 'x'.repeat(300))).toBeNull();
+    expect(webLink('tel:+18165551234')).toBeNull();
+    expect(webLink('https://a example.com')).toBeNull();
+  });
+
+  it('"new on the map" = added or edited on OSM in the last 90 days, nothing else', () => {
+    const now = new Date('2026-10-17T12:00:00Z');
+    expect(newOnMap({ osmUpdatedAt: '2026-09-30T12:00:00.000Z' }, now)).toBe(true);
+    expect(newOnMap({ osmUpdatedAt: '2026-07-19T13:00:00.000Z' }, now)).toBe(true);
+    expect(newOnMap({ osmUpdatedAt: '2026-07-19T11:00:00.000Z' }, now)).toBe(false);
+    expect(newOnMap({ osmUpdatedAt: '2027-01-01T00:00:00.000Z' }, now)).toBe(false); // future: bad data
+    expect(newOnMap({ osmUpdatedAt: null }, now)).toBe(false);
+    expect(newOnMap({}, now)).toBe(false);
   });
 
   it('calls the search and nearby functions with clamped input', async () => {

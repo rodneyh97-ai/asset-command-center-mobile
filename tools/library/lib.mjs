@@ -49,7 +49,7 @@ export function pg(v) {
 }
 
 export const FOOD_COLUMNS = ['source', 'source_id', 'kind', 'name', 'brand', 'category', 'gtin', 'ingredients_text', 'allergens', 'allergens_known', 'may_contain', 'nutrients', 'serving_g', 'verified'];
-export const PLACE_COLUMNS = ['source', 'source_id', 'kind', 'name', 'brand', 'cuisines', 'lat', 'lon', 'address'];
+export const PLACE_COLUMNS = ['source', 'source_id', 'kind', 'name', 'brand', 'cuisines', 'lat', 'lon', 'address', 'website', 'menu_url', 'osm_updated_at'];
 
 export function writer(path, columns) {
   const out = fs.createWriteStream(path);

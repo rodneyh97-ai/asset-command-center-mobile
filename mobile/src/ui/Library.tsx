@@ -7,13 +7,13 @@ import type { Allergen, Profile } from '../engine';
 import { allergyStatus } from '../library/allergy';
 import { rankFoods, rankPlaces, tasteFor } from '../library/personalize';
 import { clock } from '../clock';
-import { libraryConfigured, milesBetween, searchFoods, type Food, type NutrientKey, type Place, type PlaceKind } from '../library/client';
+import { libraryConfigured, milesBetween, newOnMap, searchFoods, type Food, type NutrientKey, type Place, type PlaceKind } from '../library/client';
 import { useStore } from '../store/AppProvider';
-import { Body, Button, Caution, ChipGroup, Icon, Row, Small } from './components';
+import { Body, Button, Caution, ChipGroup, Icon, Row, Small, Tag } from './components';
 import { ALLERGENS } from './labels';
 import { PlacesMap } from './PlacesMap';
 import { radius, space, type, useColors } from './theme';
-import { directionsUrl, menuSearchUrl, usePlaceSearch } from './usePlaceSearch';
+import { directionsUrl, menuLink, NEW_ON_MAP_LABEL, usePlaceSearch } from './usePlaceSearch';
 
 const MAX_QUERY = 60;
 const allergenName = (a: Allergen) => ALLERGENS.find((x) => x.value === a)!.label.replace(/ allergy| free/i, '').toLowerCase();
@@ -290,6 +290,11 @@ export function NearbyPanel() {
               </View>
               <Small>{miles < 0.1 ? '<0.1' : miles.toFixed(1)} mi</Small>
             </Row>
+            {newOnMap(p, clock.now()) ? (
+              <View style={{ alignSelf: 'flex-start' }}>
+                <Tag label={NEW_ON_MAP_LABEL} />
+              </View>
+            ) : null}
             {reason && !mine ? <Reason text={reason} negative={disliked} /> : null}
             <Row>
               <View style={{ flex: 1 }}>
@@ -310,14 +315,14 @@ export function NearbyPanel() {
                 </View>
               ) : p.kind === 'restaurant' || p.kind === 'fast_food' || p.kind === 'cafe' ? (
                 <View style={{ flex: 1 }}>
-                  <Button label="Menu" variant="secondary" icon="restaurant-outline" a11yLabel={`Look up the menu for ${p.name}`} onPress={() => void Linking.openURL(menuSearchUrl(p)).catch(() => {})} />
+                  <Button label={menuLink(p).kind === 'website' ? 'Website' : 'Menu'} variant="secondary" icon="restaurant-outline" a11yLabel={menuLink(p).a11y} onPress={() => void Linking.openURL(menuLink(p).url).catch(() => {})} />
                 </View>
               ) : null}
             </Row>
           </View>
         );
       })}
-      {here ? <Small>Map data © OpenStreetMap contributors (ODbL). Hours and menus aren’t included; check before you go.</Small> : null}
+      {here ? <Small>Map data © OpenStreetMap contributors (ODbL), including menu and website links where volunteers added them. Hours aren’t included; check before you go.</Small> : null}
     </View>
   );
 }

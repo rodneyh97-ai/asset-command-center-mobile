@@ -35,9 +35,18 @@ export interface Place {
   lat: number;
   lon: number;
   street: string | null;
+  /** The place's own site / menu page from OpenStreetMap (http/https only). */
+  website?: string | null;
+  menuUrl?: string | null;
+  /** Last edit of the OSM entry (any edit). Not the day the place opened. */
+  osmUpdatedAt?: string | null;
 }
 
 const str = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+/** An http(s) web link with a host, at most 300 characters; anything else (javascript:, tel:, junk) is dropped. */
+export const webLink = (v: unknown): string | null =>
+  typeof v === 'string' && v.length <= 300 && /^https?:\/\/[^\s/?#]+\.[^\s]*$/i.test(v) ? v : null;
+const isoTime = (v: unknown): string | null => (typeof v === 'string' && /^\d{4}-\d\d-\d\dT/.test(v) && Number.isFinite(Date.parse(v)) ? new Date(v).toISOString() : null);
 const allergenList = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter((a): a is Allergen => ALLERGENS.includes(a as Allergen)))] : []);
 
 export function parseFood(r: unknown): Food | null {
@@ -83,7 +92,18 @@ export function parsePlace(r: unknown): Place | null {
     lat,
     lon,
     street,
+    website: webLink(o.website),
+    menuUrl: webLink(o.menu_url),
+    osmUpdatedAt: isoTime(o.osm_updated_at),
   };
+}
+
+const NEW_ON_MAP_DAYS = 90;
+/** Added or edited on OpenStreetMap in the last 90 days. Says nothing about when the place opened. */
+export function newOnMap(p: Pick<Place, 'osmUpdatedAt'>, now: Date): boolean {
+  const t = p.osmUpdatedAt ? Date.parse(p.osmUpdatedAt) : NaN;
+  const age = now.getTime() - t;
+  return Number.isFinite(age) && age >= -86400000 && age <= NEW_ON_MAP_DAYS * 86400000;
 }
 
 type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
