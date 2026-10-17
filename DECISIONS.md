@@ -71,3 +71,5 @@ Risk: someone with a severe allergy may still choose a cross-contact meal. Every
 - **Visible learning:** "EatOS has learned N things about you" → What EatOS knows (editable, deletable).
 - **Store rating prompt:** only after 3+ meals, at least one "Loved it", 3+ days in; ≥120 days apart, max 3.
 - **Not done:** home-screen quick action / widget (the only quick-action package is unofficial and untested on this Expo version; a widget needs native code that can't be built here). iPhone users can make a Siri shortcut to `eatos://decide` (instructions in Profile). Partner invite across phones needs the server.
+
+**D21 — April schema archived, not deleted.** 2026-10-17. Founder chose "archive, then install". The April EatOS tables, views and functions moved to `legacy_april` (no API access); its auth sign-up trigger was dropped so new sign-ups don't create April-style profiles. The `rls_auto_enable` event trigger was kept in `public` (it turns on row-level security for every new table). Grocery products load only when they carry nutrition, label allergens or "may contain" data (175k of 855k US products); the rest are just a name and barcode.

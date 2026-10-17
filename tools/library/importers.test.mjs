@@ -111,3 +111,24 @@ test('OpenStreetMap: kinds, way centers, brand fallback, clean cuisines, skips j
   assert.equal(rows.find((r) => r.source_id === 'node/3').name, 'Starbucks');
   assert.ok(!rows.some((r) => ['node/4', 'node/5', 'way/6'].includes(r.source_id)));
 });
+
+test('API loader: COPY rows round-trip to JSON rows; "useful" filter keeps only products with real data', async () => {
+  const { toRow, isUseful } = await import('./load-api.mjs');
+  const out = path.join(tmp, 'off2.tsv');
+  await importOff(fx('off.tsv'), out);
+  const rows = fs.readFileSync(out, 'utf8').trim().split('\n').map((l) => toRow(l, 'foods'));
+  const bar = rows.find((r) => r.source_id === '0041196910759');
+  assert.deepEqual(bar.allergens, ['tree_nut', 'gluten']);
+  assert.deepEqual(bar.may_contain, ['peanut']);
+  assert.equal(bar.allergens_known, true);
+  assert.equal(typeof bar.nutrients, 'object');
+  const odd = rows.find((r) => r.source_id === '0000000000017');
+  assert.ok(odd.name.includes('\\'));
+  assert.equal(isUseful(odd), false, 'no nutrition, no mapped allergens, no traces');
+  assert.equal(isUseful(bar), true);
+  const places = path.join(tmp, 'osm2.tsv');
+  await importOsm(fx('overpass.json'), places);
+  const joe = toRow(fs.readFileSync(places, 'utf8').split('\n')[0], 'places');
+  assert.deepEqual(joe.cuisines, ['mexican', 'burger']);
+  assert.equal(joe.lat, 39.1);
+});
